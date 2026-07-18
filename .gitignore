@@ -1,0 +1,16 @@
+.DS_Store
+logs/
+tmp/
+node_modules/
+.env
+.env.*
+__pycache__/
+.venv/
+venv/
+dist/
+*.app
+*.pyc
+.Python
+.idea/
+.vscode/
+*.log

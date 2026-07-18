@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Deep Work",
+    "music_source_label": "WORK",
+    "music_source_type": "url",
+    "boom_note": "Uses the saved Boom 3D work tuning.",
+    "headphones_name": "",
+    "headphones_mac": ""
+  },
+  {
+    "name": "Focus Reset",
+    "music_source_label": "Focus Noise",
+    "music_source_type": "apple_music",
+    "boom_note": "Uses the saved Boom 3D focus reset tuning.",
+    "headphones_name": "",
+    "headphones_mac": ""
+  },
+  {
+    "name": "Silent Routing",
+    "music_source_label": "Headphones Only",
+    "music_source_type": "none",
+    "boom_note": "Prepares Boom 3D and routes audio without starting playback.",
+    "headphones_name": "",
+    "headphones_mac": ""
+  }
+]
