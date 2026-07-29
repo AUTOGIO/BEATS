@@ -18,6 +18,8 @@ set -euo pipefail
 PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=beats_python.sh
+source "${SCRIPT_DIR}/beats_python.sh"
 CONFIG_HELPER="${SCRIPT_DIR}/beats_config.py"
 RUNNER="${SCRIPT_DIR}/beats-headphones.sh"
 
@@ -43,7 +45,7 @@ if [[ -z "$PROFILE_NAME" || "$PROFILE_NAME_LOWER" == "default" ]]; then
 fi
 
 if [[ -n "$PROFILE_NAME" ]]; then
-  KNOWN_PROFILES="$(python3 "$CONFIG_HELPER" list-profiles | cut -f1)"
+  KNOWN_PROFILES="$("$BEATS_PYTHON" "$CONFIG_HELPER" list-profiles | cut -f1)"
   if ! printf '%s\n' "$KNOWN_PROFILES" | grep -Fxq -- "$PROFILE_NAME"; then
     printf 'BEATS: unknown profile "%s". Known profiles:\n%s\n' \
       "$PROFILE_NAME" "$KNOWN_PROFILES" >&2
@@ -51,7 +53,7 @@ if [[ -n "$PROFILE_NAME" ]]; then
   fi
 fi
 
-STATUS_FILE="$(python3 "$CONFIG_HELPER" get-setting status_file_path)"
+STATUS_FILE="$("$BEATS_PYTHON" "$CONFIG_HELPER" get-setting status_file_path)"
 
 RUN_ARGS=(--status-file "$STATUS_FILE")
 if [[ -n "$PROFILE_NAME" ]]; then
@@ -61,7 +63,7 @@ fi
 RUN_EXIT=0
 "$RUNNER" "${RUN_ARGS[@]}" || RUN_EXIT=$?
 
-SUMMARY="$(python3 - "$STATUS_FILE" <<'PY'
+SUMMARY="$("$BEATS_PYTHON" - "$STATUS_FILE" <<'PY'
 import json
 import sys
 from pathlib import Path

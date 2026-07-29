@@ -4,6 +4,8 @@ set -euo pipefail
 PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=beats_python.sh
+source "${SCRIPT_DIR}/beats_python.sh"
 CONFIG_HELPER="${SCRIPT_DIR}/beats_config.py"
 
 PROFILE_NAME=""
@@ -81,7 +83,7 @@ run_with_timeout() {
 }
 
 bluetooth_state() {
-  python3 - <<'PY'
+  "$BEATS_PYTHON" - <<'PY'
 import json
 import subprocess
 
@@ -94,7 +96,7 @@ PY
 }
 
 headphones_connected() {
-  python3 - "$HEADPHONES_NAME" <<'PY'
+  "$BEATS_PYTHON" - "$HEADPHONES_NAME" <<'PY'
 import json
 import subprocess
 import sys
@@ -198,7 +200,7 @@ write_status_file() {
   STEP_INPUT_DETAIL="$STEP_INPUT_DETAIL" \
   STEP_MUSIC_STATUS="$STEP_MUSIC_STATUS" \
   STEP_MUSIC_DETAIL="$STEP_MUSIC_DETAIL" \
-  python3 - <<'PY'
+  "$BEATS_PYTHON" - <<'PY'
 import json
 import os
 from pathlib import Path
@@ -232,7 +234,9 @@ data = {
         {"id": "music", "label": "Music", "status": os.environ["STEP_MUSIC_STATUS"], "detail": os.environ["STEP_MUSIC_DETAIL"]},
     ],
 }
-path.write_text(json.dumps(data, indent=2) + "\n")
+tmp_path = path.with_suffix(path.suffix + ".tmp")
+tmp_path.write_text(json.dumps(data, indent=2) + "\n")
+tmp_path.replace(path)
 PY
 }
 
@@ -273,13 +277,31 @@ parse_args() {
 }
 
 load_runtime_context() {
-  local helper_cmd=(python3 "$CONFIG_HELPER" runtime-env)
+  local helper_cmd=("$BEATS_PYTHON" "$CONFIG_HELPER" runtime-env-json)
   [[ -n "$PROFILE_NAME" ]] && helper_cmd+=(--profile "$PROFILE_NAME")
   [[ -n "$MUSIC_INPUT" ]] && helper_cmd+=(--music-source "$MUSIC_INPUT")
   [[ -n "$CLI_HEADPHONES_NAME" ]] && helper_cmd+=(--headphones-name "$CLI_HEADPHONES_NAME")
   [[ -n "$CLI_HEADPHONES_MAC" ]] && helper_cmd+=(--headphones-mac "$CLI_HEADPHONES_MAC")
 
-  eval "$("${helper_cmd[@]}")"
+  local runtime_json key value
+  runtime_json="$("${helper_cmd[@]}")"
+
+  while IFS= read -r key && IFS= read -r value; do
+    case "$key" in
+      PROFILE_NAME_USED) PROFILE_NAME_USED="$value" ;;
+      PROFILE_DEFAULT_SOURCE_LABEL) PROFILE_DEFAULT_SOURCE_LABEL="$value" ;;
+      PROFILE_DEFAULT_SOURCE_TYPE) PROFILE_DEFAULT_SOURCE_TYPE="$value" ;;
+      BOOM_NOTE) BOOM_NOTE="$value" ;;
+      HEADPHONES_NAME) HEADPHONES_NAME="$value" ;;
+      HEADPHONES_MAC) HEADPHONES_MAC="$value" ;;
+      MUSIC_LABEL) MUSIC_LABEL="$value" ;;
+      MUSIC_SOURCE) MUSIC_SOURCE="$value" ;;
+      MUSIC_KIND) MUSIC_KIND="$value" ;;
+      BOOM_3D_APP) BOOM_3D_APP="$value" ;;
+      BOOM_3D_BUNDLE_ID) BOOM_3D_BUNDLE_ID="$value" ;;
+      STATUS_FILE_DEFAULT) STATUS_FILE_DEFAULT="$value" ;;
+    esac
+  done < <("$BEATS_PYTHON" -c 'import json, sys; data = json.loads(sys.stdin.read()); [print(k, v, sep="\n", end="\n") for k, v in data.items()]' <<<"$runtime_json")
 
   if [[ -z "$STATUS_FILE" ]]; then
     STATUS_FILE="$STATUS_FILE_DEFAULT"
@@ -304,7 +326,7 @@ trap 'rc=$?; finalize "$rc"' EXIT
 require_cmd blueutil
 require_cmd SwitchAudioSource
 require_cmd osascript
-require_cmd python3
+require_file "$BEATS_PYTHON"
 require_file "$CONFIG_HELPER"
 
 parse_args "$@"
@@ -382,6 +404,19 @@ if [[ -z "$MUSIC_SOURCE" || "$MUSIC_KIND" == "none" ]]; then
   exit 0
 fi
 
+if [[ "$MUSIC_KIND" == "apple_music_url" ]]; then
+  log "Opening Apple Music source ${MUSIC_LABEL}"
+  if run_with_timeout 8 open -a Music "$MUSIC_SOURCE"; then
+    STEP_MUSIC_STATUS="ok"
+    STEP_MUSIC_DETAIL="Opened ${MUSIC_LABEL} in Music"
+  else
+    STEP_MUSIC_STATUS="warn"
+    STEP_MUSIC_DETAIL="Apple Music open timed out for ${MUSIC_LABEL}"
+  fi
+  log "Ready"
+  exit 0
+fi
+
 if [[ "$MUSIC_KIND" == "url" ]]; then
   log "Opening music source ${MUSIC_LABEL}"
   if run_with_timeout 8 open "$MUSIC_SOURCE"; then
@@ -398,7 +433,10 @@ fi
 log "Starting Music source ${MUSIC_LABEL}"
 if run_with_timeout 8 osascript \
   -e 'tell application "Music" to activate' \
-  -e "tell application \"Music\" to play playlist \"${MUSIC_SOURCE}\""; then
+  -e 'on run argv' \
+  -e 'tell application "Music" to play playlist argv' \
+  -e 'end run' \
+  "$MUSIC_SOURCE"; then
   STEP_MUSIC_STATUS="ok"
   STEP_MUSIC_DETAIL="Started playlist ${MUSIC_LABEL}"
 else

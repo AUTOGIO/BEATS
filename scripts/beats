@@ -1,0 +1,64 @@
+#!/bin/zsh
+# Stable CLI entry for PATH installs and Shortcuts.
+# After ./scripts/install_desktop_apps.sh, prefer: beats lock-in "Deep Work"
+set -euo pipefail
+
+PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${HOME}/.local/bin"
+
+# Resolve through symlinks so ~/.local/bin/beats still finds repo scripts.
+SOURCE="$0"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="${DIR}/${SOURCE}"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+# shellcheck source=beats_python.sh
+source "${SCRIPT_DIR}/beats_python.sh"
+
+usage() {
+  cat <<'EOF'
+BEATS — focus-session launcher
+
+Usage:
+  beats doctor
+  beats lock-in [profile]
+  beats auto
+  beats config <beats_config.py args...>
+  beats install
+  beats help
+
+Shortcuts should call:
+  beats lock-in "$1"
+  beats auto
+EOF
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  help|--help|-h)
+    usage
+    ;;
+  doctor)
+    exec "${SCRIPT_DIR}/doctor.sh"
+    ;;
+  lock-in|siri)
+    shift
+    exec "${SCRIPT_DIR}/beats-siri-trigger.sh" "${1:-}"
+    ;;
+  auto|auto-profile)
+    exec "${SCRIPT_DIR}/beats-auto-profile.sh"
+    ;;
+  config)
+    shift
+    exec "$BEATS_PYTHON" "${SCRIPT_DIR}/beats_config.py" "$@"
+    ;;
+  install)
+    exec "${SCRIPT_DIR}/install_desktop_apps.sh"
+    ;;
+  *)
+    printf 'BEATS: unknown command "%s"\n\n' "$cmd" >&2
+    usage >&2
+    exit 64
+    ;;
+esac

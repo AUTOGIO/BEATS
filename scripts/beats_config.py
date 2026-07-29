@@ -18,8 +18,8 @@ RULES_PATH = CONFIG_DIR / "beats-profile-rules.json"
 
 DEFAULT_SETTINGS = {
     "default_profile": "Deep Work",
-    "default_headphones_name": "beats4",
-    "default_headphones_mac": "58:36:53:C3:42:E9",
+    "default_headphones_name": "Your Beats Name",
+    "default_headphones_mac": "00:00:00:00:00:00",
     "boom_3d_app": "/Applications/Boom 3D.app",
     "boom_3d_bundle_id": "com.globaldelight.Boom3DMAS",
     "status_file_path": str(APP_SUPPORT_DIR / "latest-status.json"),
@@ -30,7 +30,7 @@ DEFAULT_PROFILES = [
         "name": "Deep Work",
         "music_source_label": "WORK",
         "music_source_type": "url",
-        "boom_note": "Uses the saved Boom 3D work tuning.",
+        "boom_note": "Reminder: keep Boom 3D on your saved work tuning (not auto-switched).",
         "headphones_name": "",
         "headphones_mac": "",
     },
@@ -38,7 +38,7 @@ DEFAULT_PROFILES = [
         "name": "Focus Reset",
         "music_source_label": "Focus Noise",
         "music_source_type": "apple_music",
-        "boom_note": "Uses the saved Boom 3D focus reset tuning.",
+        "boom_note": "Reminder: keep Boom 3D on your saved focus-reset tuning (not auto-switched).",
         "headphones_name": "",
         "headphones_mac": "",
     },
@@ -52,8 +52,16 @@ DEFAULT_PROFILES = [
     },
 ]
 
-RESERVED_SOURCE_NAMES = {"Custom URL"}
+RESERVED_SOURCE_NAMES = {"Custom URL", "Headphones Only"}
 PROFILE_SOURCE_TYPES = {"apple_music", "url", "none"}
+ALLOWED_SETTING_KEYS = {
+    "default_profile",
+    "default_headphones_name",
+    "default_headphones_mac",
+    "boom_3d_app",
+    "boom_3d_bundle_id",
+    "status_file_path",
+}
 
 # Upgrade A (Context-Aware Auto-Profile, see docs/PROPOSED_UPGRADES.md).
 # Pure rule lookup, no prediction: Wi-Fi SSID match takes precedence over
@@ -248,7 +256,11 @@ def source_lookup() -> dict[str, str]:
 def source_kind(value: str) -> str:
     if not value or value == "Headphones Only":
         return "none"
-    if value.startswith(("http://", "https://", "music://")):
+    if value.startswith("music://"):
+        return "apple_music_url"
+    if value.startswith(("http://", "https://")):
+        if "music.apple.com" in value:
+            return "apple_music_url"
         return "url"
     return "playlist"
 
@@ -298,17 +310,37 @@ def validate_profile_source(label: str, source_type: str) -> str:
         raise SystemExit(
             f"Source label {normalized_label} is not an Apple Music playlist entry."
         )
-    if normalized_type == "url" and actual_kind != "url":
+    if normalized_type == "url" and actual_kind not in ("url", "apple_music_url"):
         raise SystemExit(
             f"Source label {normalized_label} is not a URL entry."
         )
     return normalized_label
 
 
-def runtime_env(args: argparse.Namespace) -> None:
+def _valid_mac(value: str) -> bool:
+    parts = value.split(":")
+    if len(parts) != 6:
+        return False
+    return all(len(part) == 2 and all(ch in "0123456789abcdefABCDEF" for ch in part) for part in parts)
+
+
+def validate_setting(key: str, value: str) -> None:
+    if key not in ALLOWED_SETTING_KEYS:
+        raise SystemExit(f"Unknown setting key: {key}")
+    if key == "default_headphones_mac" and value.strip() and not _valid_mac(value.strip()):
+        raise SystemExit("Headphones MAC must be six colon-separated hex pairs (e.g. AA:BB:CC:DD:EE:FF).")
+    if key == "default_profile" and value.strip() and not get_profile(value.strip()):
+        raise SystemExit(f"Unknown profile: {value.strip()}")
+    if key == "boom_3d_app" and value.strip() and not Path(value.strip()).exists():
+        raise SystemExit(f"Boom 3D app not found at: {value.strip()}")
+
+
+def build_runtime_context(args: argparse.Namespace) -> dict[str, str]:
     settings = load_settings()
     sources = source_lookup()
     selected_profile = args.profile.strip() if args.profile else ""
+    if selected_profile and not get_profile(selected_profile):
+        raise SystemExit(f"Unknown profile: {selected_profile}")
     profile = get_profile(selected_profile) if selected_profile else None
     if profile is None and not selected_profile:
         default_profile_name = get_default_profile_name()
@@ -349,7 +381,7 @@ def runtime_env(args: argparse.Namespace) -> None:
     elif profile_source_type == "apple_music":
         resolved_music_kind = "playlist"
     elif profile_source_type == "url":
-        resolved_music_kind = "url"
+        resolved_music_kind = source_kind(music_source)
     elif profile_source_type == "none":
         resolved_music_kind = "none"
     else:
@@ -379,12 +411,33 @@ def runtime_env(args: argparse.Namespace) -> None:
             profile.get("headphones_mac", "").strip() if profile else ""
         ) or str(settings["default_headphones_mac"])
 
+    return resolved
+
+
+def runtime_env(args: argparse.Namespace) -> None:
+    resolved = build_runtime_context(args)
     for key, value in resolved.items():
         print(f"{key}={shlex.quote(value)}")
 
 
+def runtime_env_json(args: argparse.Namespace) -> None:
+    print(json.dumps(build_runtime_context(args)))
+
+
 def resolve_profile(args: argparse.Namespace) -> None:
     print(resolve_profile_from_context(args.wifi_ssid or "", args.now or ""))
+
+
+def list_wifi_rules(_: argparse.Namespace) -> None:
+    rules = load_rules()
+    for ssid, profile in rules["wifi"].items():
+        print(f"{ssid}\t{profile}")
+
+
+def list_time_rules(_: argparse.Namespace) -> None:
+    rules = load_rules()
+    for index, entry in enumerate(rules["time_ranges"]):
+        print(f"{index}\t{entry['start']}\t{entry['end']}\t{entry['profile']}")
 
 
 def view_profile_rules(_: argparse.Namespace) -> None:
@@ -485,8 +538,14 @@ def list_sources(args: argparse.Namespace) -> None:
 
     filtered_rows = []
     for label, value in rows:
-        kind = "url" if source_kind(value) == "url" else "apple_music"
-        if kind == args.kind:
+        kind = source_kind(value)
+        if kind == "playlist":
+            list_kind = "apple_music"
+        elif kind in ("url", "apple_music_url"):
+            list_kind = "url"
+        else:
+            list_kind = kind
+        if list_kind == args.kind:
             filtered_rows.append((label, value))
     print_tsv(filtered_rows)
 
@@ -501,8 +560,11 @@ def get_setting(args: argparse.Namespace) -> None:
 
 
 def update_setting(args: argparse.Namespace) -> None:
+    key = args.key.strip()
+    value = args.value
+    validate_setting(key, value)
     settings = load_settings()
-    settings[args.key] = args.value
+    settings[key] = value
     save_settings(settings)
 
 
@@ -649,6 +711,13 @@ def build_parser() -> argparse.ArgumentParser:
     runtime.add_argument("--headphones-mac")
     runtime.set_defaults(func=runtime_env)
 
+    runtime_json = subparsers.add_parser("runtime-env-json")
+    runtime_json.add_argument("--profile")
+    runtime_json.add_argument("--music-source")
+    runtime_json.add_argument("--headphones-name")
+    runtime_json.add_argument("--headphones-mac")
+    runtime_json.set_defaults(func=runtime_env_json)
+
     list_sources_parser = subparsers.add_parser("list-sources")
     list_sources_parser.add_argument(
         "--kind",
@@ -702,6 +771,8 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_profile_parser.set_defaults(func=resolve_profile)
 
     subparsers.add_parser("view-profile-rules").set_defaults(func=view_profile_rules)
+    subparsers.add_parser("list-wifi-rules").set_defaults(func=list_wifi_rules)
+    subparsers.add_parser("list-time-rules").set_defaults(func=list_time_rules)
 
     set_wifi_rule_parser = subparsers.add_parser("set-wifi-rule")
     set_wifi_rule_parser.add_argument("ssid")

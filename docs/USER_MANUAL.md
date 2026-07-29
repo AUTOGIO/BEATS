@@ -41,6 +41,12 @@ The generated apps will appear in `dist/`.
 To place them on the Desktop:
 
 ```bash
+./scripts/install_desktop_apps.sh
+```
+
+Or manually:
+
+```bash
 cp -R "./dist/Focus_Beats.app" "${HOME}/Desktop/"
 cp -R "./dist/Beats_Source.app" "${HOME}/Desktop/"
 cp -R "./dist/Beats_Settings.app" "${HOME}/Desktop/"
@@ -60,6 +66,7 @@ Source behavior:
 
 - Named playlist entry: plays in Apple Music
 - URL entry: opens via the default macOS URL handler
+- `music.apple.com` / `music://` links: open in the Music app (`open -a Music`)
 - `Custom URL`: prompts for a URL at runtime
 - `Headphones Only`: skips music startup
 
@@ -133,7 +140,7 @@ Profiles can define:
 
 - a default source label
 - a default source type
-- a Boom 3D note shown at launch time
+- a Boom note reminder shown at launch time (informational only — BEATS does not switch Boom 3D presets)
 - optional headphones name override
 - optional headphones MAC override
 
@@ -315,10 +322,11 @@ for that final OS-side hookup.
 
 ### Build the Shortcut
 
-1. Make the script executable (one-time):
+1. Install the stable CLI (one-time, or after moving the repo):
 
    ```bash
-   chmod +x ./scripts/beats-siri-trigger.sh
+   ./scripts/install_desktop_apps.sh
+   # ensure ~/.local/bin is on PATH
    ```
 
 2. Open the **Shortcuts** app and create a new shortcut named `Lock In`.
@@ -332,11 +340,10 @@ for that final OS-side hookup.
    - Script:
 
      ```bash
-     /Users/eduardofgiovannini/Documents/GitHub/BEATS/scripts/beats-siri-trigger.sh "$1"
+     export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+     beats lock-in "$1"
      ```
 
-     This repository's absolute path on this Mac is:
-     `/Users/eduardofgiovannini/Documents/GitHub/BEATS`.
 5. Add action **Show Notification**, with its content set to the shell
    script's output (the "Shell Script Result" variable).
 6. In the Shortcut's settings, enable **Use with Siri** and record a phrase
@@ -347,15 +354,16 @@ for that final OS-side hookup.
 - Run the script directly first, without Shortcuts, to confirm it behaves:
 
   ```bash
-  ./scripts/beats-siri-trigger.sh "Deep Work"
-  ./scripts/beats-siri-trigger.sh "Not A Real Profile"   # expect exit 64
+  beats doctor
+  beats lock-in "Deep Work"
+  beats lock-in "Not A Real Profile"   # expect exit 64
   ```
 
 - Only after a direct run succeeds, test it from inside Shortcuts, then from
   Siri.
 - If the Shortcut runs but nothing happens, check Shortcuts' permission to
-  run shell scripts (System Settings → Privacy & Security) and that the
-  absolute path in step 4 is correct.
+  run shell scripts (System Settings → Privacy & Security) and that
+  `~/.local/bin/beats` resolves.
 
 ### Non-goals for this prototype
 
@@ -431,10 +439,10 @@ All four rule-editing commands validate the target profile name against
 
 ### Wire it into a zero-input Shortcuts Automation
 
-1. Make the script executable (one-time):
+1. Install/link the stable CLI if needed:
 
    ```bash
-   chmod +x ./scripts/beats-auto-profile.sh
+   ./scripts/install_desktop_apps.sh
    ```
 
 2. Configure at least one Wi-Fi or time rule (see above) — with no rules
@@ -450,11 +458,10 @@ All four rule-editing commands validate the target profile name against
    - Script:
 
      ```bash
-     /Users/eduardofgiovannini/Documents/GitHub/BEATS/scripts/beats-auto-profile.sh
+     export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+     beats auto
      ```
 
-     This repository's absolute path on this Mac is:
-     `/Users/eduardofgiovannini/Documents/GitHub/BEATS`.
 6. Optionally add **Show Notification** using the shell script's result, so
    a silent automation still gives visible confirmation.
 
@@ -463,7 +470,7 @@ All four rule-editing commands validate the target profile name against
 - Run it directly first, with no Shortcuts involved:
 
   ```bash
-  ./scripts/beats-auto-profile.sh
+  beats auto
   ```
 
   Confirm the resolved profile (visible in the printed summary line) matches

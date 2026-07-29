@@ -23,6 +23,8 @@ set -euo pipefail
 PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=beats_python.sh
+source "${SCRIPT_DIR}/beats_python.sh"
 CONFIG_HELPER="${SCRIPT_DIR}/beats_config.py"
 TRIGGER="${SCRIPT_DIR}/beats-siri-trigger.sh"
 
@@ -60,6 +62,6 @@ get_wifi_ssid() {
 WIFI_SSID="$(get_wifi_ssid || true)"
 NOW="$(date +%H:%M)"
 
-RESOLVED_PROFILE="$(python3 "$CONFIG_HELPER" resolve-profile --wifi-ssid "$WIFI_SSID" --now "$NOW")"
+RESOLVED_PROFILE="$("$BEATS_PYTHON" "$CONFIG_HELPER" resolve-profile --wifi-ssid "$WIFI_SSID" --now "$NOW")"
 
 exec "$TRIGGER" "$RESOLVED_PROFILE"

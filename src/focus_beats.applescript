@@ -2,10 +2,10 @@ try
   set repoRoot to "__REPO_ROOT__"
   set helperScript to repoRoot & "/scripts/beats_config.py"
   set runnerScript to repoRoot & "/scripts/beats-headphones.sh"
-  set statusFile to do shell script "/usr/bin/python3 " & quoted form of helperScript & " get-setting status_file_path"
+  set statusFile to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " get-setting status_file_path"
 
-  set defaultProfile to do shell script "/usr/bin/python3 " & quoted form of helperScript & " get-default-profile"
-  set profileData to do shell script "/usr/bin/python3 " & quoted form of helperScript & " list-profiles"
+  set defaultProfile to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " get-default-profile"
+  set profileData to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " list-profiles"
 
   set profileLines to paragraphs of profileData
   set profileOptions to {}
@@ -44,7 +44,7 @@ try
     end repeat
   end if
 
-  set sourceData to do shell script "/usr/bin/python3 " & quoted form of helperScript & " list-sources"
+  set sourceData to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " list-sources"
   set sourceLines to paragraphs of sourceData
   set sourceOptions to {}
   repeat with sourceLine in sourceLines
@@ -65,10 +65,22 @@ try
     set profileDefaultSource to "Focus Noise"
   end if
 
+  set defaultInList to false
+  repeat with sourceOption in sourceOptions
+    if sourceOption is profileDefaultSource then set defaultInList to true
+  end repeat
+  if not defaultInList then
+    if (count of sourceOptions) is greater than 0 then
+      set profileDefaultSource to item 1 of sourceOptions
+    else
+      set profileDefaultSource to "Headphones Only"
+    end if
+  end if
+
   if profileNote is "" then
     set sourcePrompt to "Choose music source:"
   else
-    set sourcePrompt to "Choose music source:" & return & return & "Boom note: " & profileNote
+    set sourcePrompt to "Choose music source:" & return & return & "Boom note (reminder only — does not switch Boom presets): " & profileNote
   end if
 
   if selectedProfile is not "Manual Session" then
@@ -98,7 +110,7 @@ try
   try
     do shell script shellCommand & " 2>&1"
   on error errMsg number errNum
-    set summaryText to do shell script "/usr/bin/python3 - " & quoted form of statusFile & " <<'PY'
+    set summaryText to do shell script quoted form of "__BEATS_PYTHON__" & " - " & quoted form of statusFile & " <<'PY'
 import json
 import os
 import sys
@@ -124,7 +136,7 @@ PY"
     return
   end try
 
-  set summaryText to do shell script "/usr/bin/python3 - " & quoted form of statusFile & " <<'PY'
+  set summaryText to do shell script quoted form of "__BEATS_PYTHON__" & " - " & quoted form of statusFile & " <<'PY'
 import json
 import sys
 from pathlib import Path

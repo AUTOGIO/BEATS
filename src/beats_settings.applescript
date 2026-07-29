@@ -2,7 +2,7 @@ set repoRoot to "__REPO_ROOT__"
 set helperScript to repoRoot & "/scripts/beats_config.py"
 
 on readProfileNames(helperScript)
-  set profileData to do shell script "/usr/bin/python3 " & quoted form of helperScript & " list-profiles"
+  set profileData to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " list-profiles"
   if profileData is "" then return {}
   set profileNames to {}
   repeat with profileLine in paragraphs of profileData
@@ -15,7 +15,7 @@ on readProfileNames(helperScript)
 end readProfileNames
 
 on readSourceNames(helperScript, kindFilter)
-  set sourceCommand to "/usr/bin/python3 " & quoted form of helperScript & " list-sources"
+  set sourceCommand to quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " list-sources"
   if kindFilter is not "" then
     set sourceCommand to sourceCommand & " --kind " & quoted form of kindFilter
   end if
@@ -31,15 +31,33 @@ on readSourceNames(helperScript, kindFilter)
   return sourceNames
 end readSourceNames
 
+on readWifiRuleSSIDs(helperScript)
+  set wifiData to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " list-wifi-rules"
+  if wifiData is "" then return {}
+  set wifiSSIDs to {}
+  repeat with wifiLine in paragraphs of wifiData
+    set AppleScript's text item delimiters to tab
+    set wifiParts to text items of wifiLine
+    set AppleScript's text item delimiters to ""
+    if (count of wifiParts) is greater than or equal to 1 then set end of wifiSSIDs to item 1 of wifiParts
+  end repeat
+  return wifiSSIDs
+end readWifiRuleSSIDs
+
 on readTimeRuleLabels(helperScript)
-  set rulesSummary to do shell script "/usr/bin/python3 " & quoted form of helperScript & " view-profile-rules"
-  if rulesSummary is "No profile rules configured." then return {}
+  set timeData to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " list-time-rules"
+  if timeData is "" then return {}
   set ruleLabels to {}
-  set lineIndex to 0
-  repeat with summaryLine in paragraphs of rulesSummary
-    if summaryLine starts with "  " and summaryLine contains " -> " and summaryLine contains "-" then
-      set lineIndex to lineIndex + 1
-      set end of ruleLabels to (lineIndex as text) & ": " & summaryLine
+  repeat with timeLine in paragraphs of timeData
+    set AppleScript's text item delimiters to tab
+    set timeParts to text items of timeLine
+    set AppleScript's text item delimiters to ""
+    if (count of timeParts) is greater than or equal to 4 then
+      set ruleIndex to item 1 of timeParts
+      set startTime to item 2 of timeParts
+      set endTime to item 3 of timeParts
+      set profileName to item 4 of timeParts
+      set end of ruleLabels to ruleIndex & ": " & startTime & "-" & endTime & " -> " & profileName
     end if
   end repeat
   return ruleLabels
@@ -52,28 +70,28 @@ try
   set selectedAction to item 1 of actionChoice
 
   if selectedAction is "View Settings" then
-    set settingsSummary to do shell script "/usr/bin/python3 " & quoted form of helperScript & " view-settings"
+    set settingsSummary to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " view-settings"
     display dialog settingsSummary buttons {"OK"} default button "OK"
 
   else if selectedAction is "Set Hardware Target" then
-    set currentHeadphonesName to do shell script "/usr/bin/python3 " & quoted form of helperScript & " get-setting default_headphones_name"
-    set currentHeadphonesMac to do shell script "/usr/bin/python3 " & quoted form of helperScript & " get-setting default_headphones_mac"
+    set currentHeadphonesName to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " get-setting default_headphones_name"
+    set currentHeadphonesMac to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " get-setting default_headphones_mac"
     set headphonesName to text returned of (display dialog "Headphones name:" default answer currentHeadphonesName buttons {"Cancel", "Next"} default button "Next")
     set headphonesMac to text returned of (display dialog "Headphones MAC address:" default answer currentHeadphonesMac buttons {"Cancel", "Save"} default button "Save")
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " update-setting default_headphones_name " & quoted form of headphonesName
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " update-setting default_headphones_mac " & quoted form of headphonesMac
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " update-setting default_headphones_name " & quoted form of headphonesName
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " update-setting default_headphones_mac " & quoted form of headphonesMac
     display notification "Hardware target updated" with title "Beats_Settings"
 
   else if selectedAction is "Set Boom 3D App Path" then
-    set currentBoomPath to do shell script "/usr/bin/python3 " & quoted form of helperScript & " get-setting boom_3d_app"
+    set currentBoomPath to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " get-setting boom_3d_app"
     set boomPath to text returned of (display dialog "Boom 3D app path:" default answer currentBoomPath buttons {"Cancel", "Save"} default button "Save")
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " update-setting boom_3d_app " & quoted form of boomPath
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " update-setting boom_3d_app " & quoted form of boomPath
     display notification "Boom 3D path updated" with title "Beats_Settings"
 
   else if selectedAction is "Set Status File Path" then
-    set currentStatusPath to do shell script "/usr/bin/python3 " & quoted form of helperScript & " get-setting status_file_path"
+    set currentStatusPath to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " get-setting status_file_path"
     set statusPath to text returned of (display dialog "Status file path:" default answer currentStatusPath buttons {"Cancel", "Save"} default button "Save")
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " update-setting status_file_path " & quoted form of statusPath
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " update-setting status_file_path " & quoted form of statusPath
     display notification "Status file path updated" with title "Beats_Settings"
 
   else if selectedAction is "Set Default Profile" then
@@ -82,14 +100,14 @@ try
       display dialog "No profiles configured." buttons {"OK"} default button "OK"
       return
     end if
-    set currentDefaultProfile to do shell script "/usr/bin/python3 " & quoted form of helperScript & " get-default-profile"
+    set currentDefaultProfile to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " get-default-profile"
     set selectedProfileChoice to choose from list profileNames with title "Beats_Settings" with prompt "Choose default profile:" default items {currentDefaultProfile} without multiple selections allowed
     if selectedProfileChoice is false then return
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " set-default-profile " & quoted form of (item 1 of selectedProfileChoice)
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " set-default-profile " & quoted form of (item 1 of selectedProfileChoice)
     display notification "Default profile updated" with title "Beats_Settings"
 
   else if selectedAction is "View Profiles" then
-    set profileSummary to do shell script "/usr/bin/python3 " & quoted form of helperScript & " view-profiles"
+    set profileSummary to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " view-profiles"
     display dialog profileSummary buttons {"OK"} default button "OK"
 
   else if selectedAction is "Add or Update Profile" then
@@ -125,11 +143,11 @@ try
       set profileSourceType to "none"
     end if
 
-    set profileNote to text returned of (display dialog "Boom note:" default answer "" buttons {"Cancel", "Next"} default button "Next")
+    set profileNote to text returned of (display dialog "Boom note (reminder only; does not change Boom presets):" default answer "" buttons {"Cancel", "Next"} default button "Next")
     set headphonesName to text returned of (display dialog "Headphones name override (blank keeps default):" default answer "" buttons {"Cancel", "Next"} default button "Next")
     set headphonesMac to text returned of (display dialog "Headphones MAC override (blank keeps default):" default answer "" buttons {"Cancel", "Save"} default button "Save")
 
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " upsert-profile " & quoted form of profileName & " " & quoted form of profileSource & " " & quoted form of profileSourceType & " " & quoted form of profileNote & " " & quoted form of headphonesName & " " & quoted form of headphonesMac
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " upsert-profile " & quoted form of profileName & " " & quoted form of profileSource & " " & quoted form of profileSourceType & " " & quoted form of profileNote & " " & quoted form of headphonesName & " " & quoted form of headphonesMac
     display notification profileName & " saved" with title "Beats_Settings"
 
   else if selectedAction is "Remove Profile" then
@@ -140,11 +158,11 @@ try
     end if
     set selectedProfileChoice to choose from list profileNames with title "Beats_Settings" with prompt "Remove profile:" without multiple selections allowed
     if selectedProfileChoice is false then return
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " remove-profile " & quoted form of (item 1 of selectedProfileChoice)
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " remove-profile " & quoted form of (item 1 of selectedProfileChoice)
     display notification (item 1 of selectedProfileChoice) & " removed" with title "Beats_Settings"
 
   else if selectedAction is "View Auto-Profile Rules" then
-    set rulesSummary to do shell script "/usr/bin/python3 " & quoted form of helperScript & " view-profile-rules"
+    set rulesSummary to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " view-profile-rules"
     display dialog rulesSummary buttons {"OK"} default button "OK"
 
   else if selectedAction is "Set Wi-Fi Rule" then
@@ -157,32 +175,18 @@ try
     if wifiName is "" then return
     set selectedProfileChoice to choose from list profileNames with title "Beats_Settings" with prompt "Choose profile for this Wi-Fi:" without multiple selections allowed
     if selectedProfileChoice is false then return
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " set-wifi-rule " & quoted form of wifiName & " " & quoted form of (item 1 of selectedProfileChoice)
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " set-wifi-rule " & quoted form of wifiName & " " & quoted form of (item 1 of selectedProfileChoice)
     display notification "Wi-Fi rule saved" with title "Beats_Settings"
 
   else if selectedAction is "Remove Wi-Fi Rule" then
-    set rulesSummary to do shell script "/usr/bin/python3 " & quoted form of helperScript & " view-profile-rules"
-    if rulesSummary does not contain "Wi-Fi rules:" then
-      display dialog "No Wi-Fi rules configured." buttons {"OK"} default button "OK"
-      return
-    end if
-    set wifiLabels to {}
-    repeat with summaryLine in paragraphs of rulesSummary
-      if summaryLine starts with "  " and summaryLine contains " -> " and summaryLine does not contain "-" then
-        set cleanLine to text 3 thru -1 of summaryLine
-        set AppleScript's text item delimiters to " -> "
-        set wifiParts to text items of cleanLine
-        set AppleScript's text item delimiters to ""
-        if (count of wifiParts) is equal to 2 then set end of wifiLabels to item 1 of wifiParts
-      end if
-    end repeat
+    set wifiLabels to readWifiRuleSSIDs(helperScript)
     if wifiLabels is {} then
       display dialog "No Wi-Fi rules configured." buttons {"OK"} default button "OK"
       return
     end if
     set wifiChoice to choose from list wifiLabels with title "Beats_Settings" with prompt "Remove Wi-Fi rule:" without multiple selections allowed
     if wifiChoice is false then return
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " remove-wifi-rule " & quoted form of (item 1 of wifiChoice)
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " remove-wifi-rule " & quoted form of (item 1 of wifiChoice)
     display notification "Wi-Fi rule removed" with title "Beats_Settings"
 
   else if selectedAction is "Add Time Rule" then
@@ -195,7 +199,7 @@ try
     set endTime to text returned of (display dialog "End time (HH:MM):" default answer "12:00" buttons {"Cancel", "Next"} default button "Next")
     set selectedProfileChoice to choose from list profileNames with title "Beats_Settings" with prompt "Choose profile for this time range:" without multiple selections allowed
     if selectedProfileChoice is false then return
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " add-time-rule " & quoted form of startTime & " " & quoted form of endTime & " " & quoted form of (item 1 of selectedProfileChoice)
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " add-time-rule " & quoted form of startTime & " " & quoted form of endTime & " " & quoted form of (item 1 of selectedProfileChoice)
     display notification "Time rule saved" with title "Beats_Settings"
 
   else if selectedAction is "Remove Time Rule" then
@@ -211,7 +215,7 @@ try
     set labelParts to text items of selectedLabel
     set AppleScript's text item delimiters to ""
     set ruleIndex to (item 1 of labelParts as integer) - 1
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " remove-time-rule " & quoted form of (ruleIndex as text)
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " remove-time-rule " & quoted form of (ruleIndex as text)
     display notification "Time rule removed" with title "Beats_Settings"
 
   else if selectedAction is "Set Fallback Profile" then
@@ -226,7 +230,7 @@ try
     if fallbackChoice is false then return
     set fallbackProfile to item 1 of fallbackChoice
     if fallbackProfile is "None" then set fallbackProfile to ""
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " set-fallback-profile " & quoted form of fallbackProfile
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " set-fallback-profile " & quoted form of fallbackProfile
     display notification "Fallback profile updated" with title "Beats_Settings"
   end if
 on error errMsg number errNum

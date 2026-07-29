@@ -2,7 +2,7 @@ set repoRoot to "__REPO_ROOT__"
 set helperScript to repoRoot & "/scripts/beats_config.py"
 
 on readSources()
-  set sourceData to do shell script "/usr/bin/python3 " & quoted form of helperScript & " list-sources"
+  set sourceData to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " list-sources"
   if sourceData is "" then return {}
   return paragraphs of sourceData
 end readSources
@@ -20,7 +20,7 @@ try
     set sourceValue to text returned of (display dialog "Playlist name or music URL:" default answer "" buttons {"Cancel", "Save"} default button "Save")
     if sourceValue is "" then return
 
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " upsert-source " & quoted form of sourceLabel & " " & quoted form of sourceValue
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " upsert-source " & quoted form of sourceLabel & " " & quoted form of sourceValue
     display notification sourceLabel & " saved" with title "Beats_Source"
 
   else if selectedAction is "Remove Source" then
@@ -42,7 +42,7 @@ try
     if removeChoice is false then return
 
     set removeLabel to item 1 of removeChoice
-    do shell script "/usr/bin/python3 " & quoted form of helperScript & " remove-source " & quoted form of removeLabel
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " remove-source " & quoted form of removeLabel
     display notification removeLabel & " removed" with title "Beats_Source"
 
   else if selectedAction is "View Sources" then

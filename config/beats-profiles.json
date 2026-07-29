@@ -3,7 +3,7 @@
     "name": "Deep Work",
     "music_source_label": "WORK",
     "music_source_type": "url",
-    "boom_note": "Uses the saved Boom 3D work tuning.",
+    "boom_note": "Reminder: keep Boom 3D on your saved work tuning (not auto-switched).",
     "headphones_name": "",
     "headphones_mac": ""
   },
@@ -11,7 +11,7 @@
     "name": "Focus Reset",
     "music_source_label": "Focus Noise",
     "music_source_type": "apple_music",
-    "boom_note": "Uses the saved Boom 3D focus reset tuning.",
+    "boom_note": "Reminder: keep Boom 3D on your saved focus-reset tuning (not auto-switched).",
     "headphones_name": "",
     "headphones_mac": ""
   },

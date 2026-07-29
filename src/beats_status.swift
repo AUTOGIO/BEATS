@@ -51,6 +51,15 @@ struct StatusFile: Decodable {
     let device: Device
     let music: Music
     let steps: [Step]
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case exitCode = "exit_code"
+        case profile
+        case device
+        case music
+        case steps
+    }
 }
 
 final class BeatsStatusApp: NSObject, NSApplicationDelegate {
@@ -61,8 +70,11 @@ final class BeatsStatusApp: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var menu: NSMenu!
     private var refreshTimer: Timer?
+    private var batteryTimer: Timer?
+    private var cachedBatteryDescription = "unknown"
     private var directoryWatcher: DispatchSourceFileSystemObject?
     private var watchedDescriptor: CInt = -1
+    private var watchedDirectoryPath = ""
 
     private let headlineItem = NSMenuItem(title: "Status: --", action: nil, keyEquivalent: "")
     private let profileItem = NSMenuItem(title: "Profile: --", action: nil, keyEquivalent: "")
@@ -98,18 +110,17 @@ final class BeatsStatusApp: NSObject, NSApplicationDelegate {
 
         statusItem.menu = menu
 
-        configureWatcher()
+        refreshBattery()
+        ensureWatcher()
         refreshStatus()
         refreshTimer = Timer.scheduledTimer(timeInterval: 5.0, target: self, selector: #selector(refreshStatus), userInfo: nil, repeats: true)
+        batteryTimer = Timer.scheduledTimer(timeInterval: 60.0, target: self, selector: #selector(refreshBattery), userInfo: nil, repeats: true)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         refreshTimer?.invalidate()
-        directoryWatcher?.cancel()
-        if watchedDescriptor >= 0 {
-            close(watchedDescriptor)
-            watchedDescriptor = -1
-        }
+        batteryTimer?.invalidate()
+        teardownWatcher()
     }
 
     private func loadSettings() -> Settings? {
@@ -144,7 +155,16 @@ final class BeatsStatusApp: NSObject, NSApplicationDelegate {
         return value
     }
 
+    @objc private func refreshBattery() {
+        cachedBatteryDescription = readBatteryDescription(
+            name: currentHeadphonesName(),
+            mac: currentHeadphonesMac()
+        )
+        batteryItem.title = "Battery: \(cachedBatteryDescription)"
+    }
+
     @objc private func refreshStatus() {
+        ensureWatcher()
         let statusURL = currentStatusURL()
         guard let data = try? Data(contentsOf: statusURL),
               let status = try? JSONDecoder().decode(StatusFile.self, from: data) else {
@@ -153,7 +173,7 @@ final class BeatsStatusApp: NSObject, NSApplicationDelegate {
             profileItem.title = "Profile: --"
             musicItem.title = "Music: --"
             headphonesItem.title = "Headphones: \(currentHeadphonesName())"
-            batteryItem.title = "Battery: \(readBatteryDescription(name: currentHeadphonesName(), mac: currentHeadphonesMac()))"
+            batteryItem.title = "Battery: \(cachedBatteryDescription)"
             exitItem.title = "Last run: no status file"
             return
         }
@@ -161,7 +181,7 @@ final class BeatsStatusApp: NSObject, NSApplicationDelegate {
         let profileName = status.profile.name ?? "Manual Session"
         let musicLabel = status.music.label ?? "Headphones Only"
         let headphonesName = status.device.headphonesName ?? currentHeadphonesName()
-        let battery = readBatteryDescription(name: headphonesName, mac: status.device.headphonesMac ?? currentHeadphonesMac())
+        let battery = cachedBatteryDescription
         let statusText = status.success ? "ok" : "error"
 
         statusItem.button?.title = "FB: \(shorten(profileName))"
@@ -178,11 +198,30 @@ final class BeatsStatusApp: NSObject, NSApplicationDelegate {
         return String(value.prefix(13)) + "…"
     }
 
-    private func configureWatcher() {
+    private func ensureWatcher() {
         let directory = currentStatusURL().deletingLastPathComponent().path
+        if directory == watchedDirectoryPath, directoryWatcher != nil {
+            return
+        }
+        teardownWatcher()
+        configureWatcher(for: directory)
+    }
+
+    private func teardownWatcher() {
+        directoryWatcher?.cancel()
+        directoryWatcher = nil
+        if watchedDescriptor >= 0 {
+            close(watchedDescriptor)
+            watchedDescriptor = -1
+        }
+        watchedDirectoryPath = ""
+    }
+
+    private func configureWatcher(for directory: String) {
         watchedDescriptor = open(directory, O_EVTONLY)
         guard watchedDescriptor >= 0 else { return }
 
+        watchedDirectoryPath = directory
         directoryWatcher = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: watchedDescriptor,
             eventMask: [.write, .rename, .delete, .extend],
