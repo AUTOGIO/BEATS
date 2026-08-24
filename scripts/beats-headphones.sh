@@ -26,6 +26,7 @@ MUSIC_KIND=""
 BOOM_3D_APP=""
 BOOM_3D_BUNDLE_ID=""
 STATUS_FILE_DEFAULT=""
+YOUTUBE_APP="/Users/eduardofgiovannini/Applications/YouTube.app"
 
 STEP_PROFILE_STATUS="pending"
 STEP_PROFILE_DETAIL="Waiting for profile resolution"
@@ -80,6 +81,11 @@ run_with_timeout() {
   done
 
   wait "$pid"
+}
+
+is_youtube_url() {
+  local candidate="${1:l}"
+  [[ "$candidate" == *"youtube.com"* || "$candidate" == *"youtu.be"* ]]
 }
 
 bluetooth_state() {
@@ -419,12 +425,29 @@ fi
 
 if [[ "$MUSIC_KIND" == "url" ]]; then
   log "Opening music source ${MUSIC_LABEL}"
-  if run_with_timeout 8 open "$MUSIC_SOURCE"; then
-    STEP_MUSIC_STATUS="ok"
-    STEP_MUSIC_DETAIL="Opened ${MUSIC_LABEL}"
+  if is_youtube_url "$MUSIC_SOURCE"; then
+    if [[ ! -d "$YOUTUBE_APP" ]]; then
+      STEP_MUSIC_STATUS="warn"
+      STEP_MUSIC_DETAIL="Missing YouTube app at ${YOUTUBE_APP}"
+      log "$STEP_MUSIC_DETAIL"
+      log "Ready"
+      exit 0
+    fi
+    if run_with_timeout 8 open -a "$YOUTUBE_APP" "$MUSIC_SOURCE"; then
+      STEP_MUSIC_STATUS="ok"
+      STEP_MUSIC_DETAIL="Opened ${MUSIC_LABEL} in YouTube.app"
+    else
+      STEP_MUSIC_STATUS="warn"
+      STEP_MUSIC_DETAIL="YouTube.app open timed out for ${MUSIC_LABEL}"
+    fi
   else
-    STEP_MUSIC_STATUS="warn"
-    STEP_MUSIC_DETAIL="URL open timed out for ${MUSIC_LABEL}"
+    if run_with_timeout 8 open "$MUSIC_SOURCE"; then
+      STEP_MUSIC_STATUS="ok"
+      STEP_MUSIC_DETAIL="Opened ${MUSIC_LABEL}"
+    else
+      STEP_MUSIC_STATUS="warn"
+      STEP_MUSIC_DETAIL="URL open timed out for ${MUSIC_LABEL}"
+    fi
   fi
   log "Ready"
   exit 0

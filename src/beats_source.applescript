@@ -1,7 +1,7 @@
 set repoRoot to "__REPO_ROOT__"
 set helperScript to repoRoot & "/scripts/beats_config.py"
 
-on readSources()
+on readSources(helperScript)
   set sourceData to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " list-sources"
   if sourceData is "" then return {}
   return paragraphs of sourceData
@@ -24,7 +24,7 @@ try
     display notification sourceLabel & " saved" with title "Beats_Source"
 
   else if selectedAction is "Remove Source" then
-    set sourceLines to readSources()
+    set sourceLines to readSources(helperScript)
     if sourceLines is {} then
       display dialog "No music sources to remove." buttons {"OK"} default button "OK"
       return
@@ -46,7 +46,7 @@ try
     display notification removeLabel & " removed" with title "Beats_Source"
 
   else if selectedAction is "View Sources" then
-    set sourceLines to readSources()
+    set sourceLines to readSources(helperScript)
     if sourceLines is {} then
       set sourceSummary to "No music sources configured."
     else

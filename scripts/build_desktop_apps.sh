@@ -9,11 +9,13 @@ source "${REPO_ROOT}/scripts/beats_python.sh"
 
 DIST_DIR="${REPO_ROOT}/dist"
 FOCUS_TEMPLATE="${REPO_ROOT}/src/focus_beats.applescript"
+STOP_TEMPLATE="${REPO_ROOT}/src/stop_beats.applescript"
 MANAGE_TEMPLATE="${REPO_ROOT}/src/beats_source.applescript"
 SETTINGS_TEMPLATE="${REPO_ROOT}/src/beats_settings.applescript"
 STATUS_SOURCE="${REPO_ROOT}/src/beats_status.swift"
 ICON_SOURCE="${REPO_ROOT}/assets/zR5UJ.jpg"
 LOCK_IN_APP="${DIST_DIR}/Focus_Beats.app"
+STOP_APP="${DIST_DIR}/Stop_Beats.app"
 MANAGE_APP="${DIST_DIR}/Beats_Source.app"
 SETTINGS_APP="${DIST_DIR}/Beats_Settings.app"
 STATUS_APP="${DIST_DIR}/Beats_Status.app"
@@ -163,11 +165,13 @@ else
 fi
 
 compile_template "${FOCUS_TEMPLATE}" "${LOCK_IN_APP}"
+compile_template "${STOP_TEMPLATE}" "${STOP_APP}"
 compile_template "${MANAGE_TEMPLATE}" "${MANAGE_APP}"
 compile_template "${SETTINGS_TEMPLATE}" "${SETTINGS_APP}"
 compile_swift_menu_app "${STATUS_SOURCE}" "${STATUS_APP}"
 
 printf 'Built with Python %s\n' "${BEATS_PYTHON}"
-printf 'Built:\n%s\n%s\n' "${LOCK_IN_APP}" "${MANAGE_APP}"
+printf 'Built:\n%s\n%s\n' "${LOCK_IN_APP}" "${STOP_APP}"
+printf '%s\n' "${MANAGE_APP}"
 printf '%s\n' "${SETTINGS_APP}"
 printf '%s\n' "${STATUS_APP}"

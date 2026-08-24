@@ -24,6 +24,7 @@ Usage:
   beats doctor
   beats lock-in [profile]
   beats auto
+  beats stop
   beats config <beats_config.py args...>
   beats install
   beats help
@@ -48,6 +49,10 @@ case "$cmd" in
     ;;
   auto|auto-profile)
     exec "${SCRIPT_DIR}/beats-auto-profile.sh"
+    ;;
+  stop|off|shutdown)
+    shift
+    exec "${SCRIPT_DIR}/beats-stop.sh" "$@"
     ;;
   config)
     shift
