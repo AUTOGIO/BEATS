@@ -4,13 +4,10 @@ set -euo pipefail
 PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${HOME}/.local/bin"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # shellcheck source=beats_python.sh
 source "${SCRIPT_DIR}/beats_python.sh"
 
 CONFIG_HELPER="${SCRIPT_DIR}/beats_config.py"
-TARGET_HEADPHONES_NAME="beats4"
-YOUTUBE_APP_PATH="/Users/eduardofgiovannini/Applications/YouTube.app"
 DRY_RUN=0
 
 usage() {
@@ -21,8 +18,8 @@ Usage:
   beats-stop.sh [--dry-run]
 
 Actions:
-  1. Quit YouTube.app
-  2. Disconnect only beats4
+  1. Quit YouTube.app if running
+  2. Disconnect the headphones from config/beats-settings.json
   3. Quit Boom 3D.app
 EOF
 }
@@ -36,14 +33,6 @@ require_cmd() {
     printf '[beats-stop] Missing dependency: %s\n' "$1" >&2
     exit 1
   fi
-}
-
-run_step() {
-  if (( DRY_RUN )); then
-    printf '[beats-stop] [dry-run] %s\n' "$*"
-    return 0
-  fi
-  "$@"
 }
 
 get_setting() {
@@ -103,21 +92,29 @@ quit_app_if_running() {
 }
 
 disconnect_target_headphones() {
-  local connected_mac
-  connected_mac="$(connected_device_mac_by_name "$TARGET_HEADPHONES_NAME")"
+  local target_name="$1"
+  local configured_mac="$2"
+  local connected_mac=""
+
+  if [[ -n "$target_name" ]]; then
+    connected_mac="$(connected_device_mac_by_name "$target_name")"
+  fi
+  if [[ -z "$connected_mac" && -n "$configured_mac" ]]; then
+    connected_mac="$configured_mac"
+  fi
 
   if [[ -z "$connected_mac" ]]; then
-    log "${TARGET_HEADPHONES_NAME} not connected"
+    log "${target_name:-headphones} not connected"
     return 0
   fi
 
   if (( DRY_RUN )); then
-    log "[dry-run] disconnect ${TARGET_HEADPHONES_NAME} (${connected_mac})"
+    log "[dry-run] disconnect ${target_name:-headphones} (${connected_mac})"
     return 0
   fi
 
   blueutil --disconnect "$connected_mac" >/dev/null
-  log "Disconnected ${TARGET_HEADPHONES_NAME} (${connected_mac})"
+  log "Disconnected ${target_name:-headphones} (${connected_mac})"
 }
 
 while (( $# > 0 )); do
@@ -143,9 +140,13 @@ require_cmd osascript
 require_cmd blueutil
 [[ -f "$CONFIG_HELPER" ]] || { printf '[beats-stop] Missing required file: %s\n' "$CONFIG_HELPER" >&2; exit 1; }
 
-configured_headphones_name="$(get_setting default_headphones_name)"
-if [[ -n "$configured_headphones_name" && "$configured_headphones_name" != "$TARGET_HEADPHONES_NAME" ]]; then
-  log "Configured default headphones are ${configured_headphones_name}; shutdown still targets ${TARGET_HEADPHONES_NAME} only"
+target_headphones_name="$(get_setting default_headphones_name)"
+target_headphones_mac="$(get_setting default_headphones_mac)"
+if [[ "$target_headphones_name" == "Your Beats Name" ]]; then
+  target_headphones_name=""
+fi
+if [[ "$target_headphones_mac" == "00:00:00:00:00:00" ]]; then
+  target_headphones_mac=""
 fi
 
 boom_app_path="$(get_setting boom_3d_app)"
@@ -154,12 +155,8 @@ if [[ -z "$boom_app_path" ]]; then
 fi
 boom_app_name="$(basename "$boom_app_path" .app)"
 
-if [[ ! -d "$YOUTUBE_APP_PATH" ]]; then
-  log "YouTube app path not found at ${YOUTUBE_APP_PATH}; will still try to quit any running YouTube process"
-fi
-
 quit_app_if_running "YouTube"
-disconnect_target_headphones
+disconnect_target_headphones "$target_headphones_name" "$target_headphones_mac"
 quit_app_if_running "$boom_app_name"
 
 log "Done"

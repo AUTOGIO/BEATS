@@ -32,26 +32,26 @@ When `Focus_Beats.app` runs, it performs the following sequence:
 From the repository root:
 
 ```bash
-chmod +x ./scripts/build_desktop_apps.sh ./scripts/beats-headphones.sh
-./scripts/build_desktop_apps.sh
-```
-
-The generated apps will appear in `dist/`.
-
-To place them on the Desktop:
-
-```bash
 ./scripts/install_desktop_apps.sh
 ```
 
-Or manually:
+That rebuilds `dist/`, copies the apps to the Desktop, and links `~/.local/bin/beats` to this clone. After moving or recloning the repo, run it again — the apps bake the repository path at compile time.
+
+The generated apps also appear in `dist/`.
+
+Or copy manually after `./scripts/build_desktop_apps.sh`:
 
 ```bash
 cp -R "./dist/Focus_Beats.app" "${HOME}/Desktop/"
 cp -R "./dist/Beats_Source.app" "${HOME}/Desktop/"
 cp -R "./dist/Beats_Settings.app" "${HOME}/Desktop/"
 cp -R "./dist/Beats_Status.app" "${HOME}/Desktop/"
+cp -R "./dist/Stop_Beats.app" "${HOME}/Desktop/"
 ```
+
+### First-run permissions
+
+The applets are ad hoc–signed for personal use. On first launch, macOS may ask for Automation (Music, System Events), and Shortcuts needs permission to run shell scripts. Grant those prompts or the workflow fails with a generic AppleScript error.
 
 ## Desktop Actions
 
@@ -124,6 +124,7 @@ This action supports:
 - `View Settings`
 - `Set Hardware Target`
 - `Set Boom 3D App Path`
+- `Set YouTube App Path`
 - `Set Status File Path`
 - `Set Default Profile`
 - `View Profiles`
@@ -188,7 +189,7 @@ Label<TAB>Playlist or URL
 Example:
 
 ```text
-YouTube Playlist	https://youtube.com/playlist?list=PLieRSdP0b5KKYe02bLmr778MeMfX6HkUk&si=WfJEHKWp6brkXuts
+YouTube Playlist	https://youtube.com/playlist?list=PLieRSdP0b5KKYe02bLmr778MeMfX6HkUk
 Focus Noise	Focus Noise
 ```
 
@@ -205,7 +206,7 @@ The main shell entry point is [scripts/beats-headphones.sh](../scripts/beats-hea
 Common edits:
 
 - change default headphone target: update `config/beats-settings.json` or use `Beats_Settings.app`
-- change default Boom 3D app path: update `config/beats-settings.json` or use `Beats_Settings.app`
+- change default YouTube.app path: update `config/beats-settings.json` (`youtube_app`, blank = auto-detect `~/Applications` then `/Applications`) or use `Beats_Settings.app`
 - change shared status file path: update `config/beats-settings.json` or use `Beats_Settings.app`
 - change session defaults: update `config/beats-profiles.json` or use `Beats_Settings.app`
 
@@ -230,6 +231,18 @@ brew install blueutil switchaudio-osx
 ```
 
 ## Failure Modes
+
+### Focus_Beats cannot open `beats_config.py`
+
+Symptom:
+
+- dialog `Focus_Beats failed:` with `[Errno 2] No such file or directory` for `scripts/beats_config.py`
+
+Fix:
+
+- the Desktop apps still point at an old clone path
+- from the current repository root run `./scripts/install_desktop_apps.sh`
+- confirm `readlink ~/.local/bin/beats` points at this clone
 
 ### Boom 3D missing
 
@@ -502,4 +515,4 @@ All four rule-editing commands validate the target profile name against
 - Use `beats-siri-trigger.sh` for automation surfaces that cannot show dialogs.
 - Use `beats-auto-profile.sh` only after rule validation on the real Mac.
 - Launch `Beats_Status.app` only when you want a persistent live view; it is intentionally opt-in, not auto-installed.
-- Version-control `beats-music-sources.tsv`, `beats-profiles.json`, `beats-settings.json`, and `beats-profile-rules.json` after meaningful changes.
+- Version-control `beats-music-sources.tsv`, `beats-profiles.json`, and `beats-profile-rules.json` after meaningful changes. Keep `beats-settings.json` local (gitignored).

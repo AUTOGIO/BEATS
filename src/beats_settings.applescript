@@ -64,7 +64,7 @@ on readTimeRuleLabels(helperScript)
 end readTimeRuleLabels
 
 try
-  set actionChoice to choose from list {"View Settings", "Set Hardware Target", "Set Boom 3D App Path", "Set Status File Path", "Set Default Profile", "View Profiles", "Add or Update Profile", "Remove Profile", "View Auto-Profile Rules", "Set Wi-Fi Rule", "Remove Wi-Fi Rule", "Add Time Rule", "Remove Time Rule", "Set Fallback Profile"} with title "Beats_Settings" with prompt "Choose action:" default items {"View Settings"} without multiple selections allowed
+  set actionChoice to choose from list {"View Settings", "Set Hardware Target", "Set Boom 3D App Path", "Set YouTube App Path", "Set Status File Path", "Set Default Profile", "View Profiles", "Add or Update Profile", "Remove Profile", "View Auto-Profile Rules", "Set Wi-Fi Rule", "Remove Wi-Fi Rule", "Add Time Rule", "Remove Time Rule", "Set Fallback Profile"} with title "Beats_Settings" with prompt "Choose action:" default items {"View Settings"} without multiple selections allowed
   if actionChoice is false then return
 
   set selectedAction to item 1 of actionChoice
@@ -87,6 +87,12 @@ try
     set boomPath to text returned of (display dialog "Boom 3D app path:" default answer currentBoomPath buttons {"Cancel", "Save"} default button "Save")
     do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " update-setting boom_3d_app " & quoted form of boomPath
     display notification "Boom 3D path updated" with title "Beats_Settings"
+
+  else if selectedAction is "Set YouTube App Path" then
+    set currentYouTubePath to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " get-setting youtube_app"
+    set youtubePath to text returned of (display dialog "YouTube.app path (blank = auto-detect):" default answer currentYouTubePath buttons {"Cancel", "Save"} default button "Save")
+    do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " update-setting youtube_app " & quoted form of youtubePath
+    display notification "YouTube path updated" with title "Beats_Settings"
 
   else if selectedAction is "Set Status File Path" then
     set currentStatusPath to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " get-setting status_file_path"

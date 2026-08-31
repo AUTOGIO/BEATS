@@ -97,9 +97,9 @@ compile_template() {
   tmp_app_dir="$(mktemp -d)"
   tmp_app_path="${tmp_app_dir}/$(basename "${output_path}")"
   substitute_template "${template_path}" "${tmp_file}"
-  rm -rf "${output_path}"
   osacompile -o "${tmp_app_path}" "${tmp_file}"
   xattr -cr "${tmp_app_path}" 2>/dev/null || true
+  rm -rf "${output_path}"
   ditto "${tmp_app_path}" "${output_path}"
   apply_icon "${output_path}" "${ICON_ICNS}"
   rm -f "${tmp_file}"
@@ -150,8 +150,8 @@ compile_swift_menu_app() {
 </plist>
 EOF
 
-  rm -rf "${output_path}"
   xattr -cr "${tmp_app_path}" 2>/dev/null || true
+  rm -rf "${output_path}"
   ditto "${tmp_app_path}" "${output_path}"
   apply_icon "${output_path}" "${ICON_ICNS}"
   rm -f "${tmp_source}"

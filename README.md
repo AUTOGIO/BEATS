@@ -10,7 +10,7 @@ brew install blueutil switchaudio-osx
 ./scripts/doctor.sh
 ```
 
-`install_desktop_apps.sh` builds the four Desktop apps, applies the shared icon, and links `~/.local/bin/beats`.
+`install_desktop_apps.sh` builds the Desktop apps, applies the shared icon, and links `~/.local/bin/beats`.
 
 Then run `Focus_Beats.app`, or:
 
@@ -19,7 +19,7 @@ beats lock-in "Deep Work"
 beats auto
 ```
 
-Copy `config/beats-settings.example.json` to `config/beats-settings.json` and set your headphones name and MAC before the first run (if you do not already have a local settings file).
+Copy `config/beats-settings.example.json` to `config/beats-settings.json` and set your headphones name and MAC before the first run (if you do not already have a local settings file). That live file is gitignored.
 
 ## Install and rebuild
 
@@ -50,11 +50,11 @@ Checks Python, Homebrew CLIs, Boom 3D, headphones settings, and status-file writ
 /usr/bin/python3 -m unittest discover -s tests -v
 ```
 
-Apps and shell runners prefer `/usr/bin/python3` for parity (override with `BEATS_PYTHON`).
+Apps and shell runners prefer `/usr/bin/python3` for parity (override with `BEATS_PYTHON`). On this Mac that binary is an Xcode shim (`xcode-select`), so error dialogs may show `Xcode-beta.app/.../python3` even when the baked path is `/usr/bin/python3`.
 
 ## Privacy
 
-No cloud credentials are stored in this repo. `config/beats-settings.json` may contain your Bluetooth MAC and local paths — treat it as personal data if you publish or share the repository.
+No cloud credentials are stored in this repo. `config/beats-settings.json` is gitignored because it may contain your Bluetooth MAC and local paths. Keep `beats-settings.example.json` as the tracked template.
 
 ## Layout
 

@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import shlex
+import subprocess
 from pathlib import Path
 
 
@@ -23,6 +26,7 @@ DEFAULT_SETTINGS = {
     "boom_3d_app": "/Applications/Boom 3D.app",
     "boom_3d_bundle_id": "com.globaldelight.Boom3DMAS",
     "status_file_path": str(APP_SUPPORT_DIR / "latest-status.json"),
+    "youtube_app": "",
 }
 
 DEFAULT_PROFILES = [
@@ -61,7 +65,18 @@ ALLOWED_SETTING_KEYS = {
     "boom_3d_app",
     "boom_3d_bundle_id",
     "status_file_path",
+    "youtube_app",
 }
+
+STATUS_STEP_SPECS = (
+    ("profile", "Profile", "STEP_PROFILE"),
+    ("boom", "Boom 3D", "STEP_BOOM"),
+    ("bluetooth", "Bluetooth", "STEP_BLUETOOTH"),
+    ("headphones", "Headphones", "STEP_HEADPHONES"),
+    ("output", "Output", "STEP_OUTPUT"),
+    ("input", "Input", "STEP_INPUT"),
+    ("music", "Music", "STEP_MUSIC"),
+)
 
 # Upgrade A (Context-Aware Auto-Profile, see docs/PROPOSED_UPGRADES.md).
 # Pure rule lookup, no prediction: Wi-Fi SSID match takes precedence over
@@ -75,6 +90,178 @@ DEFAULT_RULES: dict[str, object] = {
     "time_ranges": [],
     "fallback_profile": "",
 }
+
+
+def _run_text(argv: list[str], timeout: int = 8) -> str:
+    try:
+        return subprocess.check_output(
+            argv,
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def resolve_youtube_app(configured: str = "") -> str:
+    candidate = configured.strip()
+    if candidate:
+        path = Path(candidate).expanduser()
+        if path.is_dir():
+            return str(path)
+        return ""
+
+    for path in (
+        Path.home() / "Applications" / "YouTube.app",
+        Path("/Applications/YouTube.app"),
+    ):
+        if path.is_dir():
+            return str(path)
+    return ""
+
+
+def _ssid_from_networksetup() -> str:
+    for iface in ("en0", "en1"):
+        output = _run_text(["networksetup", "-getairportnetwork", iface])
+        prefix = "Current Wi-Fi Network: "
+        for line in output.splitlines():
+            if line.startswith(prefix):
+                ssid = line[len(prefix) :].strip()
+                if ssid:
+                    return ssid
+    return ""
+
+
+def _ssid_from_ipconfig() -> str:
+    for iface in ("en0", "en1"):
+        output = _run_text(["ipconfig", "getsummary", iface])
+        match = re.search(r"\bSSID\s*:\s*(.+)$", output, re.MULTILINE)
+        if match:
+            ssid = match.group(1).strip()
+            if ssid:
+                return ssid
+    return ""
+
+
+def _walk_ssid(value: object) -> str:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            lower = str(key).lower()
+            if "ssid" in lower and isinstance(child, str) and child.strip():
+                if child.strip().lower() not in {"yes", "no", "true", "false"}:
+                    return child.strip()
+            found = _walk_ssid(child)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _walk_ssid(child)
+            if found:
+                return found
+    return ""
+
+
+def _ssid_from_system_profiler() -> str:
+    raw = _run_text(["system_profiler", "SPAirPortDataType", "-json"], timeout=20)
+    if not raw:
+        return ""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return ""
+    return _walk_ssid(data)
+
+
+def current_wifi_ssid() -> str:
+    for resolver in (_ssid_from_networksetup, _ssid_from_ipconfig, _ssid_from_system_profiler):
+        ssid = resolver()
+        if ssid:
+            return ssid
+    return ""
+
+
+def build_status_document(
+    exit_code: int,
+    profile_name: str = "",
+    profile_default_source_label: str = "",
+    profile_default_source_type: str = "",
+    boom_note: str = "",
+    headphones_name: str = "",
+    headphones_mac: str = "",
+    music_label: str = "",
+    music_source: str = "",
+    music_kind: str = "",
+    steps: list[dict[str, str]] | None = None,
+) -> dict[str, object]:
+    if steps is None:
+        steps = [
+            {"id": step_id, "label": label, "status": "pending", "detail": ""}
+            for step_id, label, _prefix in STATUS_STEP_SPECS
+        ]
+    return {
+        "success": exit_code == 0,
+        "exit_code": int(exit_code),
+        "profile": {
+            "name": profile_name,
+            "default_source_label": profile_default_source_label,
+            "default_source_type": profile_default_source_type,
+            "boom_note": boom_note,
+        },
+        "device": {
+            "headphones_name": headphones_name,
+            "headphones_mac": headphones_mac,
+        },
+        "music": {
+            "label": music_label,
+            "source": music_source,
+            "kind": music_kind,
+        },
+        "steps": steps,
+    }
+
+
+def write_status(_: argparse.Namespace) -> None:
+    path_value = os.environ.get("STATUS_FILE_PATH", "").strip()
+    if not path_value:
+        return
+    exit_raw = os.environ.get("EXIT_CODE", "1")
+    try:
+        exit_code = int(exit_raw)
+    except ValueError:
+        exit_code = 1
+
+    steps = [
+        {
+            "id": step_id,
+            "label": label,
+            "status": os.environ.get(f"{prefix}_STATUS", "pending"),
+            "detail": os.environ.get(f"{prefix}_DETAIL", ""),
+        }
+        for step_id, label, prefix in STATUS_STEP_SPECS
+    ]
+    data = build_status_document(
+        exit_code=exit_code,
+        profile_name=os.environ.get("PROFILE_NAME_USED", ""),
+        profile_default_source_label=os.environ.get("PROFILE_DEFAULT_SOURCE_LABEL", ""),
+        profile_default_source_type=os.environ.get("PROFILE_DEFAULT_SOURCE_TYPE", ""),
+        boom_note=os.environ.get("BOOM_NOTE", ""),
+        headphones_name=os.environ.get("HEADPHONES_NAME", ""),
+        headphones_mac=os.environ.get("HEADPHONES_MAC", ""),
+        music_label=os.environ.get("MUSIC_LABEL", ""),
+        music_source=os.environ.get("MUSIC_SOURCE", ""),
+        music_kind=os.environ.get("MUSIC_KIND", ""),
+        steps=steps,
+    )
+    path = Path(path_value)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(data, indent=2) + "\n")
+    tmp_path.replace(path)
+
+
+def print_wifi_ssid(_: argparse.Namespace) -> None:
+    print(current_wifi_ssid())
 
 
 def ensure_file(path: Path, default_content: str) -> None:
@@ -333,6 +520,8 @@ def validate_setting(key: str, value: str) -> None:
         raise SystemExit(f"Unknown profile: {value.strip()}")
     if key == "boom_3d_app" and value.strip() and not Path(value.strip()).exists():
         raise SystemExit(f"Boom 3D app not found at: {value.strip()}")
+    if key == "youtube_app" and value.strip() and not Path(value.strip()).expanduser().exists():
+        raise SystemExit(f"YouTube app not found at: {value.strip()}")
 
 
 def build_runtime_context(args: argparse.Namespace) -> dict[str, str]:
@@ -400,6 +589,7 @@ def build_runtime_context(args: argparse.Namespace) -> dict[str, str]:
         "BOOM_3D_APP": str(settings["boom_3d_app"]),
         "BOOM_3D_BUNDLE_ID": str(settings["boom_3d_bundle_id"]),
         "STATUS_FILE_DEFAULT": str(settings["status_file_path"]),
+        "YOUTUBE_APP": resolve_youtube_app(str(settings.get("youtube_app", ""))),
     }
 
     if not resolved["HEADPHONES_NAME"]:
@@ -579,6 +769,7 @@ def view_settings(_: argparse.Namespace) -> None:
                 f"Boom 3D app: {settings['boom_3d_app']}",
                 f"Boom 3D bundle ID: {settings['boom_3d_bundle_id']}",
                 f"Status file: {settings['status_file_path']}",
+                f"YouTube app: {settings.get('youtube_app') or resolve_youtube_app() or '(auto, not found)'}",
             ]
         )
     )
@@ -796,6 +987,9 @@ def build_parser() -> argparse.ArgumentParser:
     set_fallback_profile_parser = subparsers.add_parser("set-fallback-profile")
     set_fallback_profile_parser.add_argument("name")
     set_fallback_profile_parser.set_defaults(func=set_fallback_profile)
+
+    subparsers.add_parser("write-status").set_defaults(func=write_status)
+    subparsers.add_parser("current-wifi-ssid").set_defaults(func=print_wifi_ssid)
 
     return parser
 

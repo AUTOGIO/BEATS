@@ -95,15 +95,27 @@ if [[ -f "$CONFIG_HELPER" && -f "$SETTINGS_PATH" ]]; then
 
   if [[ -n "$status_path" ]]; then
     status_dir="$(dirname "$status_path")"
-    if mkdir -p "$status_dir" 2>/dev/null && [[ -w "$status_dir" ]]; then
-      pass "status directory writable: ${status_dir}"
+    if [[ -d "$status_dir" ]]; then
+      if [[ -w "$status_dir" ]]; then
+        pass "status directory writable: ${status_dir}"
+      else
+        bad "status directory not writable: ${status_dir}"
+      fi
     else
-      bad "status directory not writable: ${status_dir}"
+      status_parent="$(dirname "$status_dir")"
+      if [[ -w "$status_parent" ]]; then
+        note "status directory missing (parent writable): ${status_dir}"
+      else
+        bad "status directory missing and parent not writable: ${status_dir}"
+      fi
     fi
   fi
 fi
 
-if command -v beats >/dev/null 2>&1; then
+beats_cli="${HOME}/.local/bin/beats"
+if [[ -L "$beats_cli" && ! -e "$beats_cli" ]]; then
+  bad "beats CLI symlink is broken (${beats_cli}) — run ./scripts/install_desktop_apps.sh"
+elif command -v beats >/dev/null 2>&1; then
   pass "beats CLI on PATH ($(command -v beats))"
 elif [[ -x "${HOME}/.local/bin/beats" ]]; then
   note "beats CLI installed at ~/.local/bin/beats but not on current PATH"

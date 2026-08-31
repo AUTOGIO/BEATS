@@ -27,8 +27,8 @@ class BeatsConfigTests(unittest.TestCase):
             json.dumps(
                 {
                     "default_profile": "Deep Work",
-                    "default_headphones_name": "beats4",
-                    "default_headphones_mac": "58:36:53:C3:42:E9",
+                    "default_headphones_name": "Test Headphones",
+                    "default_headphones_mac": "AA:BB:CC:DD:EE:FF",
                     "boom_3d_app": "/Applications/Boom 3D.app",
                     "boom_3d_bundle_id": "com.globaldelight.Boom3DMAS",
                     "status_file_path": str(
@@ -174,6 +174,20 @@ class BeatsConfigTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             config.update_setting(args)
 
+    def test_resolve_youtube_app_uses_configured_path(self) -> None:
+        fake_app = self.config_dir / "YouTube.app"
+        fake_app.mkdir()
+        self.assertEqual(config.resolve_youtube_app(str(fake_app)), str(fake_app))
+        self.assertEqual(config.resolve_youtube_app("/missing/YouTube.app"), "")
+
+    def test_ssid_from_networksetup_output(self) -> None:
+        with patch.object(
+            config,
+            "_run_text",
+            return_value="Current Wi-Fi Network: Office-5G\n",
+        ):
+            self.assertEqual(config._ssid_from_networksetup(), "Office-5G")
+
     def test_list_wifi_and_time_rules(self) -> None:
         from io import StringIO
 
@@ -190,17 +204,69 @@ class BeatsConfigTests(unittest.TestCase):
 
 
 class StatusSchemaTests(unittest.TestCase):
-    def test_status_json_has_exit_code(self) -> None:
-        sample = {
-            "success": True,
-            "exit_code": 0,
-            "profile": {"name": "Deep Work"},
-            "device": {"headphones_name": "beats4", "headphones_mac": "58:36:53:C3:42:E9"},
-            "music": {"label": "Focus Noise", "kind": "playlist"},
-            "steps": [{"label": "Profile", "status": "ok", "detail": "ok"}],
-        }
-        self.assertIn("exit_code", sample)
-        self.assertNotIn("exitCode", sample)
+    def test_status_json_matches_swift_decoder(self) -> None:
+        document = config.build_status_document(
+            exit_code=0,
+            profile_name="Deep Work",
+            headphones_name="Test Headphones",
+            headphones_mac="AA:BB:CC:DD:EE:FF",
+            music_label="Focus Noise",
+            music_kind="playlist",
+            steps=[
+                {"id": "profile", "label": "Profile", "status": "ok", "detail": "ok"}
+            ],
+        )
+        encoded = json.dumps(document)
+        parsed = json.loads(encoded)
+        self.assertIn("exit_code", parsed)
+        self.assertNotIn("exitCode", parsed)
+        self.assertEqual(
+            set(parsed),
+            {"success", "exit_code", "profile", "device", "music", "steps"},
+        )
+        self.assertEqual(
+            set(parsed["device"]),
+            {"headphones_name", "headphones_mac"},
+        )
+        self.assertTrue(parsed["success"])
+        self.assertEqual(parsed["exit_code"], 0)
+
+    def test_write_status_from_environ(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            status_path = Path(temp_dir) / "latest-status.json"
+            env = {
+                "STATUS_FILE_PATH": str(status_path),
+                "EXIT_CODE": "0",
+                "PROFILE_NAME_USED": "Deep Work",
+                "PROFILE_DEFAULT_SOURCE_LABEL": "WORK",
+                "PROFILE_DEFAULT_SOURCE_TYPE": "url",
+                "BOOM_NOTE": "",
+                "HEADPHONES_NAME": "Test Headphones",
+                "HEADPHONES_MAC": "AA:BB:CC:DD:EE:FF",
+                "MUSIC_LABEL": "WORK",
+                "MUSIC_SOURCE": "https://example.com/work",
+                "MUSIC_KIND": "url",
+                "STEP_PROFILE_STATUS": "ok",
+                "STEP_PROFILE_DETAIL": "Using profile Deep Work",
+                "STEP_BOOM_STATUS": "ok",
+                "STEP_BOOM_DETAIL": "ready",
+                "STEP_BLUETOOTH_STATUS": "ok",
+                "STEP_BLUETOOTH_DETAIL": "on",
+                "STEP_HEADPHONES_STATUS": "ok",
+                "STEP_HEADPHONES_DETAIL": "connected",
+                "STEP_OUTPUT_STATUS": "ok",
+                "STEP_OUTPUT_DETAIL": "routed",
+                "STEP_INPUT_STATUS": "skipped",
+                "STEP_INPUT_DETAIL": "none",
+                "STEP_MUSIC_STATUS": "ok",
+                "STEP_MUSIC_DETAIL": "opened",
+            }
+            with patch.dict("os.environ", env, clear=False):
+                config.write_status(type("Args", (), {})())
+            parsed = json.loads(status_path.read_text())
+            self.assertEqual(parsed["exit_code"], 0)
+            self.assertEqual(len(parsed["steps"]), 7)
+            self.assertEqual(parsed["steps"][0]["status"], "ok")
 
 
 if __name__ == "__main__":

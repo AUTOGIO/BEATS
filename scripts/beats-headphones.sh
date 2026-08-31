@@ -26,7 +26,7 @@ MUSIC_KIND=""
 BOOM_3D_APP=""
 BOOM_3D_BUNDLE_ID=""
 STATUS_FILE_DEFAULT=""
-YOUTUBE_APP="/Users/eduardofgiovannini/Applications/YouTube.app"
+YOUTUBE_APP=""
 
 STEP_PROFILE_STATUS="pending"
 STEP_PROFILE_DETAIL="Waiting for profile resolution"
@@ -179,8 +179,6 @@ write_status_file() {
     return
   fi
 
-  mkdir -p "$(dirname "$STATUS_FILE")"
-
   STATUS_FILE_PATH="$STATUS_FILE" \
   EXIT_CODE="$exit_code" \
   PROFILE_NAME_USED="$PROFILE_NAME_USED" \
@@ -206,44 +204,7 @@ write_status_file() {
   STEP_INPUT_DETAIL="$STEP_INPUT_DETAIL" \
   STEP_MUSIC_STATUS="$STEP_MUSIC_STATUS" \
   STEP_MUSIC_DETAIL="$STEP_MUSIC_DETAIL" \
-  "$BEATS_PYTHON" - <<'PY'
-import json
-import os
-from pathlib import Path
-
-path = Path(os.environ["STATUS_FILE_PATH"])
-data = {
-    "success": os.environ["EXIT_CODE"] == "0",
-    "exit_code": int(os.environ["EXIT_CODE"]),
-    "profile": {
-        "name": os.environ["PROFILE_NAME_USED"],
-        "default_source_label": os.environ["PROFILE_DEFAULT_SOURCE_LABEL"],
-        "default_source_type": os.environ["PROFILE_DEFAULT_SOURCE_TYPE"],
-        "boom_note": os.environ["BOOM_NOTE"],
-    },
-    "device": {
-        "headphones_name": os.environ["HEADPHONES_NAME"],
-        "headphones_mac": os.environ["HEADPHONES_MAC"],
-    },
-    "music": {
-        "label": os.environ["MUSIC_LABEL"],
-        "source": os.environ["MUSIC_SOURCE"],
-        "kind": os.environ["MUSIC_KIND"],
-    },
-    "steps": [
-        {"id": "profile", "label": "Profile", "status": os.environ["STEP_PROFILE_STATUS"], "detail": os.environ["STEP_PROFILE_DETAIL"]},
-        {"id": "boom", "label": "Boom 3D", "status": os.environ["STEP_BOOM_STATUS"], "detail": os.environ["STEP_BOOM_DETAIL"]},
-        {"id": "bluetooth", "label": "Bluetooth", "status": os.environ["STEP_BLUETOOTH_STATUS"], "detail": os.environ["STEP_BLUETOOTH_DETAIL"]},
-        {"id": "headphones", "label": "Headphones", "status": os.environ["STEP_HEADPHONES_STATUS"], "detail": os.environ["STEP_HEADPHONES_DETAIL"]},
-        {"id": "output", "label": "Output", "status": os.environ["STEP_OUTPUT_STATUS"], "detail": os.environ["STEP_OUTPUT_DETAIL"]},
-        {"id": "input", "label": "Input", "status": os.environ["STEP_INPUT_STATUS"], "detail": os.environ["STEP_INPUT_DETAIL"]},
-        {"id": "music", "label": "Music", "status": os.environ["STEP_MUSIC_STATUS"], "detail": os.environ["STEP_MUSIC_DETAIL"]},
-    ],
-}
-tmp_path = path.with_suffix(path.suffix + ".tmp")
-tmp_path.write_text(json.dumps(data, indent=2) + "\n")
-tmp_path.replace(path)
-PY
+  "$BEATS_PYTHON" "$CONFIG_HELPER" write-status
 }
 
 parse_args() {
@@ -306,6 +267,7 @@ load_runtime_context() {
       BOOM_3D_APP) BOOM_3D_APP="$value" ;;
       BOOM_3D_BUNDLE_ID) BOOM_3D_BUNDLE_ID="$value" ;;
       STATUS_FILE_DEFAULT) STATUS_FILE_DEFAULT="$value" ;;
+      YOUTUBE_APP) YOUTUBE_APP="$value" ;;
     esac
   done < <("$BEATS_PYTHON" -c 'import json, sys; data = json.loads(sys.stdin.read()); [print(k, v, sep="\n", end="\n") for k, v in data.items()]' <<<"$runtime_json")
 
@@ -426,19 +388,20 @@ fi
 if [[ "$MUSIC_KIND" == "url" ]]; then
   log "Opening music source ${MUSIC_LABEL}"
   if is_youtube_url "$MUSIC_SOURCE"; then
-    if [[ ! -d "$YOUTUBE_APP" ]]; then
-      STEP_MUSIC_STATUS="warn"
-      STEP_MUSIC_DETAIL="Missing YouTube app at ${YOUTUBE_APP}"
-      log "$STEP_MUSIC_DETAIL"
-      log "Ready"
-      exit 0
-    fi
-    if run_with_timeout 8 open -a "$YOUTUBE_APP" "$MUSIC_SOURCE"; then
+    if [[ -n "$YOUTUBE_APP" && -d "$YOUTUBE_APP" ]]; then
+      if run_with_timeout 8 open -a "$YOUTUBE_APP" "$MUSIC_SOURCE"; then
+        STEP_MUSIC_STATUS="ok"
+        STEP_MUSIC_DETAIL="Opened ${MUSIC_LABEL} in YouTube.app"
+      else
+        STEP_MUSIC_STATUS="warn"
+        STEP_MUSIC_DETAIL="YouTube.app open timed out for ${MUSIC_LABEL}"
+      fi
+    elif run_with_timeout 8 open "$MUSIC_SOURCE"; then
       STEP_MUSIC_STATUS="ok"
-      STEP_MUSIC_DETAIL="Opened ${MUSIC_LABEL} in YouTube.app"
+      STEP_MUSIC_DETAIL="Opened ${MUSIC_LABEL} with the default URL handler"
     else
       STEP_MUSIC_STATUS="warn"
-      STEP_MUSIC_DETAIL="YouTube.app open timed out for ${MUSIC_LABEL}"
+      STEP_MUSIC_DETAIL="URL open timed out for ${MUSIC_LABEL}"
     fi
   else
     if run_with_timeout 8 open "$MUSIC_SOURCE"; then
@@ -455,9 +418,11 @@ fi
 
 log "Starting Music source ${MUSIC_LABEL}"
 if run_with_timeout 8 osascript \
-  -e 'tell application "Music" to activate' \
   -e 'on run argv' \
-  -e 'tell application "Music" to play playlist argv' \
+  -e 'tell application "Music"' \
+  -e 'activate' \
+  -e 'play playlist (item 1 of argv)' \
+  -e 'end tell' \
   -e 'end run' \
   "$MUSIC_SOURCE"; then
   STEP_MUSIC_STATUS="ok"

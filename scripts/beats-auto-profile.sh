@@ -38,25 +38,8 @@ require_file() {
 require_file "$CONFIG_HELPER"
 require_file "$TRIGGER"
 
-# Fail-safe, not fail-loud: if Wi-Fi lookup isn't available or the device
-# isn't associated with a network, treat that as "no Wi-Fi signal" rather
-# than aborting the whole auto-profile run.
 get_wifi_ssid() {
-  if ! command -v networksetup >/dev/null 2>&1; then
-    return 0
-  fi
-
-  local iface output
-  for iface in en0 en1; do
-    if output="$(networksetup -getairportnetwork "$iface" 2>/dev/null)"; then
-      case "$output" in
-        "Current Wi-Fi Network: "*)
-          printf '%s' "${output#Current Wi-Fi Network: }"
-          return 0
-          ;;
-      esac
-    fi
-  done
+  "$BEATS_PYTHON" "$CONFIG_HELPER" current-wifi-ssid 2>/dev/null || true
 }
 
 WIFI_SSID="$(get_wifi_ssid || true)"

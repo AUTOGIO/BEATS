@@ -3,5 +3,6 @@
   "default_headphones_name": "Your Beats Name",
   "default_headphones_mac": "00:00:00:00:00:00",
   "boom_3d_app": "/Applications/Boom 3D.app",
-  "boom_3d_bundle_id": "com.globaldelight.Boom3DMAS"
+  "boom_3d_bundle_id": "com.globaldelight.Boom3DMAS",
+  "youtube_app": ""
 }
