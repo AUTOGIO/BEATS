@@ -22,5 +22,13 @@
     "boom_note": "Prepares Boom 3D and routes audio without starting playback.",
     "headphones_name": "",
     "headphones_mac": ""
+  },
+  {
+    "name": "test",
+    "music_source_label": "FAVORITES",
+    "music_source_type": "apple_music",
+    "boom_note": "",
+    "headphones_name": "",
+    "headphones_mac": ""
   }
 ]

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This workflow reduces the start-of-session audio setup to three desktop actions:
+This workflow reduces the start-of-session audio setup to a few app actions under `dist/`:
 
 - `Focus_Beats.app`
 - `Beats_Source.app`
@@ -35,25 +35,15 @@ From the repository root:
 ./scripts/install_desktop_apps.sh
 ```
 
-That rebuilds `dist/`, copies the apps to the Desktop, and links `~/.local/bin/beats` to this clone. After moving or recloning the repo, run it again — the apps bake the repository path at compile time.
+That rebuilds the apps under `dist/` and links `~/.local/bin/beats` to this clone. After moving or recloning the repo, run it again — the apps bake the repository path at compile time.
 
-The generated apps also appear in `dist/`.
-
-Or copy manually after `./scripts/build_desktop_apps.sh`:
-
-```bash
-cp -R "./dist/Focus_Beats.app" "${HOME}/Desktop/"
-cp -R "./dist/Beats_Source.app" "${HOME}/Desktop/"
-cp -R "./dist/Beats_Settings.app" "${HOME}/Desktop/"
-cp -R "./dist/Beats_Status.app" "${HOME}/Desktop/"
-cp -R "./dist/Stop_Beats.app" "${HOME}/Desktop/"
-```
+Open the apps from `dist/` (for example `open dist/Focus_Beats.app`). They are not copied to the Desktop.
 
 ### First-run permissions
 
 The applets are ad hoc–signed for personal use. On first launch, macOS may ask for Automation (Music, System Events), and Shortcuts needs permission to run shell scripts. Grant those prompts or the workflow fails with a generic AppleScript error.
 
-## Desktop Actions
+## App actions (`dist/`)
 
 ### Focus_Beats
 
@@ -240,7 +230,7 @@ Symptom:
 
 Fix:
 
-- the Desktop apps still point at an old clone path
+- the `dist/` apps still point at an old clone path
 - from the current repository root run `./scripts/install_desktop_apps.sh`
 - confirm `readlink ~/.local/bin/beats` points at this clone
 

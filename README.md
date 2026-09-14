@@ -10,11 +10,12 @@ brew install blueutil switchaudio-osx
 ./scripts/doctor.sh
 ```
 
-`install_desktop_apps.sh` builds the Desktop apps, applies the shared icon, and links `~/.local/bin/beats`.
+`install_desktop_apps.sh` builds the apps into `dist/`, applies the shared icon, and links `~/.local/bin/beats`.
 
-Then run `Focus_Beats.app`, or:
+Then open an app from `dist/`, or use the CLI:
 
 ```bash
+open dist/Focus_Beats.app
 beats lock-in "Deep Work"
 beats auto
 ```
@@ -23,7 +24,7 @@ Copy `config/beats-settings.example.json` to `config/beats-settings.json` and se
 
 ## Install and rebuild
 
-Desktop apps embed the repository path and Python path at build time. After moving or recloning this repo, run:
+Apps under `dist/` embed the repository path and Python path at build time. After moving or recloning this repo, run:
 
 ```bash
 ./scripts/install_desktop_apps.sh
@@ -62,6 +63,7 @@ No cloud credentials are stored in this repo. `config/beats-settings.json` is gi
 - `scripts/` — shell + Python helpers (`beats`, `doctor.sh`, config CLI, runners, build/install)
 - `config/` — profiles, settings, music sources, auto-profile rules
 - `assets/` — shared app icon source (`zR5UJ.jpg`)
+- `dist/` — built `.app` bundles (open from here; rebuild with install/build scripts)
 - `docs/` — user manual and design notes
 - `tests/` — unit tests for config logic
 
