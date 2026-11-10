@@ -115,7 +115,9 @@ disconnect_target_headphones() {
     connected_mac="$(connected_device_mac_by_name "$target_name")"
   fi
   if [[ -z "$connected_mac" && -n "$configured_mac" ]]; then
-    connected_mac="$configured_mac"
+    if [[ "$(blueutil --is-connected "$configured_mac" 2>/dev/null || true)" == "1" ]]; then
+      connected_mac="$configured_mac"
+    fi
   fi
 
   if [[ -z "$connected_mac" ]]; then
@@ -128,7 +130,7 @@ disconnect_target_headphones() {
     return 0
   fi
 
-  blueutil --disconnect "$connected_mac" >/dev/null
+  blueutil --disconnect "$connected_mac" >/dev/null 2>&1
   log "Disconnected ${target_name:-headphones} (${connected_mac})"
 }
 

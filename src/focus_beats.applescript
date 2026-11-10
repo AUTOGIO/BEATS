@@ -67,7 +67,7 @@ try
 
   set defaultInList to false
   repeat with sourceOption in sourceOptions
-    if sourceOption is profileDefaultSource then set defaultInList to true
+    if (sourceOption as text) is profileDefaultSource then set defaultInList to true
   end repeat
   if not defaultInList then
     if (count of sourceOptions) is greater than 0 then

@@ -11,3 +11,4 @@ dist/
 # Local backups
 *.bak
 *.bak-*
+config/beats-settings.json
