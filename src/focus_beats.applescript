@@ -102,9 +102,30 @@ try
     if selectedSource is "" then return
   end if
 
+  set headphoneData to do shell script quoted form of "__BEATS_PYTHON__" & " " & quoted form of helperScript & " list-headphones"
+  set headphoneLines to paragraphs of headphoneData
+  set headphoneOptions to {}
+  repeat with headphoneLine in headphoneLines
+    set headphoneName to headphoneLine as text
+    if headphoneName is not "" then
+      set end of headphoneOptions to headphoneName
+    end if
+  end repeat
+
+  set selectedHeadphones to ""
+  if (count of headphoneOptions) is greater than 1 then
+    set defaultHeadphones to item 1 of headphoneOptions
+    set selectedHeadphonesChoice to choose from list headphoneOptions with title "Focus_Beats" with prompt "Which headphones?" default items {defaultHeadphones} without multiple selections allowed
+    if selectedHeadphonesChoice is false then return
+    set selectedHeadphones to item 1 of selectedHeadphonesChoice
+  end if
+
   set shellCommand to quoted form of runnerScript & " --status-file " & quoted form of statusFile & " --music-source " & quoted form of selectedSource
   if selectedProfile is not "Manual Session" then
     set shellCommand to shellCommand & " --profile " & quoted form of selectedProfile
+  end if
+  if selectedHeadphones is not "" then
+    set shellCommand to shellCommand & " --headphones-name " & quoted form of selectedHeadphones
   end if
 
   try

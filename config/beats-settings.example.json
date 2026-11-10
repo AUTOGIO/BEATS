@@ -2,6 +2,7 @@
   "default_profile": "Deep Work",
   "default_headphones_name": "Your Beats Name",
   "default_headphones_mac": "00:00:00:00:00:00",
+  "headphones_devices": {},
   "boom_3d_app": "/Applications/Boom 3D.app",
   "boom_3d_bundle_id": "com.globaldelight.Boom3DMAS",
   "youtube_app": ""

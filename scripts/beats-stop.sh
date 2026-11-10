@@ -19,7 +19,7 @@ Usage:
 
 Actions:
   1. Quit YouTube.app if running
-  2. Disconnect the headphones from config/beats-settings.json
+  2. Disconnect any saved headphones that are currently connected
   3. Quit Boom 3D.app
 EOF
 }
@@ -37,6 +37,21 @@ require_cmd() {
 
 get_setting() {
   "$BEATS_PYTHON" "$CONFIG_HELPER" get-setting "$1" 2>/dev/null || true
+}
+
+saved_headphone_rows() {
+  "$BEATS_PYTHON" - "$CONFIG_HELPER" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("beats_config", path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+for name, mac in module.saved_headphones():
+    print(f"{name}\t{mac}")
+PY
 }
 
 connected_device_mac_by_name() {
@@ -140,15 +155,6 @@ require_cmd osascript
 require_cmd blueutil
 [[ -f "$CONFIG_HELPER" ]] || { printf '[beats-stop] Missing required file: %s\n' "$CONFIG_HELPER" >&2; exit 1; }
 
-target_headphones_name="$(get_setting default_headphones_name)"
-target_headphones_mac="$(get_setting default_headphones_mac)"
-if [[ "$target_headphones_name" == "Your Beats Name" ]]; then
-  target_headphones_name=""
-fi
-if [[ "$target_headphones_mac" == "00:00:00:00:00:00" ]]; then
-  target_headphones_mac=""
-fi
-
 boom_app_path="$(get_setting boom_3d_app)"
 if [[ -z "$boom_app_path" ]]; then
   boom_app_path="/Applications/Boom 3D.app"
@@ -156,7 +162,18 @@ fi
 boom_app_name="$(basename "$boom_app_path" .app)"
 
 quit_app_if_running "YouTube"
-disconnect_target_headphones "$target_headphones_name" "$target_headphones_mac"
+while IFS=$'\t' read -r target_headphones_name target_headphones_mac; do
+  if [[ "$target_headphones_name" == "Your Beats Name" ]]; then
+    target_headphones_name=""
+  fi
+  if [[ "$target_headphones_mac" == "00:00:00:00:00:00" ]]; then
+    target_headphones_mac=""
+  fi
+  if [[ -z "$target_headphones_name" && -z "$target_headphones_mac" ]]; then
+    continue
+  fi
+  disconnect_target_headphones "$target_headphones_name" "$target_headphones_mac"
+done < <(saved_headphone_rows)
 quit_app_if_running "$boom_app_name"
 
 log "Done"

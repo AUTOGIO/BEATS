@@ -202,6 +202,59 @@ class BeatsConfigTests(unittest.TestCase):
             config.list_time_rules(args)
         self.assertIn("0\t09:00\t12:00\tFocus Reset", buffer.getvalue())
 
+    def _write_headphones_devices(self, devices: dict[str, str]) -> None:
+        settings = json.loads(self.settings_path.read_text())
+        settings["headphones_devices"] = devices
+        self.settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+
+    def test_runtime_resolves_mac_from_headphones_devices(self) -> None:
+        self._write_headphones_devices({"WH-1000XM6": "11:22:33:44:55:66"})
+        args = type(
+            "Args",
+            (),
+            {
+                "profile": "Deep Work",
+                "music_source": "",
+                "headphones_name": "WH-1000XM6",
+                "headphones_mac": "",
+            },
+        )()
+        context = config.build_runtime_context(args)
+        self.assertEqual(context["HEADPHONES_NAME"], "WH-1000XM6")
+        self.assertEqual(context["HEADPHONES_MAC"], "11:22:33:44:55:66")
+
+    def test_runtime_unknown_headphones_name_without_mac_exits(self) -> None:
+        args = type(
+            "Args",
+            (),
+            {
+                "profile": "Deep Work",
+                "music_source": "",
+                "headphones_name": "Ghost Headset",
+                "headphones_mac": "",
+            },
+        )()
+        with self.assertRaises(SystemExit) as raised:
+            config.build_runtime_context(args)
+        self.assertNotEqual(raised.exception.code, 0)
+
+    def test_list_headphones_prints_default_first(self) -> None:
+        from io import StringIO
+
+        self._write_headphones_devices(
+            {
+                "WH-1000XM6": "11:22:33:44:55:66",
+                "Test Headphones": "AA:BB:CC:DD:EE:FF",
+            }
+        )
+        buffer = StringIO()
+        with patch("sys.stdout", buffer):
+            config.list_headphones(type("Args", (), {})())
+        self.assertEqual(
+            buffer.getvalue().splitlines(),
+            ["Test Headphones", "WH-1000XM6"],
+        )
+
 
 class StatusSchemaTests(unittest.TestCase):
     def test_status_json_matches_swift_decoder(self) -> None:

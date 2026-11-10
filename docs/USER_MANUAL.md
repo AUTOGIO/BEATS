@@ -66,6 +66,8 @@ Profile behavior:
 - that type controls the default non-interactive path used by Siri, auto-profile, and any profile run with no manual source override
 - in the interactive picker, you can still override the profile default for the current run
 
+If `config/beats-settings.json` has more than one saved headset, Focus_Beats asks **Which headphones?** before starting the run. One saved device skips the dialog. See [Multiple headphones](#multiple-headphones).
+
 After execution, the app shows a compact summary for:
 
 - profile resolution
@@ -167,6 +169,28 @@ Behavior:
 - includes a Reveal Status File command
 - includes a visible Quit command
 - does not launch itself automatically
+
+## Multiple headphones
+
+`default_headphones_name` / `default_headphones_mac` stay the default headset. Extra devices live in an optional `headphones_devices` map in `config/beats-settings.json` (name → MAC). There is no editor in `Beats_Settings.app` — edit the JSON by hand:
+
+```json
+"default_headphones_name": "beats4",
+"default_headphones_mac": "AA:BB:CC:DD:EE:FF",
+"headphones_devices": {
+  "WH-1000XM6": "11:22:33:44:55:66"
+}
+```
+
+The Bluetooth name must match `blueutil --paired` and `SwitchAudioSource -a -t output` exactly. After adding a second device, rebuild apps with `./scripts/install_desktop_apps.sh` so `Focus_Beats.app` can show the picker.
+
+`Focus_Beats.app` passes `--headphones-name` into the runner; the MAC is looked up from the map. `beats lock-in` still uses the default headset. To pick a named device from the shell:
+
+```bash
+./scripts/beats-headphones.sh --profile "Deep Work" --headphones-name "WH-1000XM6"
+```
+
+`Stop_Beats.app` / `beats stop` disconnects every saved device that is currently connected, not only the default.
 
 ## Editing the Source Registry Manually
 

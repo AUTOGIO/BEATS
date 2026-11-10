@@ -23,6 +23,7 @@ DEFAULT_SETTINGS = {
     "default_profile": "Deep Work",
     "default_headphones_name": "Your Beats Name",
     "default_headphones_mac": "00:00:00:00:00:00",
+    "headphones_devices": {},
     "boom_3d_app": "/Applications/Boom 3D.app",
     "boom_3d_bundle_id": "com.globaldelight.Boom3DMAS",
     "status_file_path": str(APP_SUPPORT_DIR / "latest-status.json"),
@@ -269,17 +270,91 @@ def ensure_file(path: Path, default_content: str) -> None:
         path.write_text(default_content)
 
 
-def load_settings() -> dict[str, str]:
+def _parse_headphones_devices(raw: object) -> dict[str, str]:
+    if raw in (None, ""):
+        return {}
+    if not isinstance(raw, dict):
+        raise SystemExit("headphones_devices must be an object of name -> MAC.")
+    devices: dict[str, str] = {}
+    for name, mac in raw.items():
+        name_s = str(name).strip()
+        mac_s = str(mac).strip()
+        if not name_s:
+            continue
+        if not _valid_mac(mac_s):
+            raise SystemExit(f"Invalid MAC for headphones device {name_s}: {mac_s}")
+        devices[name_s] = mac_s
+    return devices
+
+
+def load_settings() -> dict:
     ensure_file(SETTINGS_PATH, json.dumps(DEFAULT_SETTINGS, indent=2) + "\n")
-    settings = DEFAULT_SETTINGS.copy()
+    settings = json.loads(json.dumps(DEFAULT_SETTINGS))
     raw = json.loads(SETTINGS_PATH.read_text())
     for key, value in raw.items():
+        if key == "headphones_devices":
+            continue
         settings[key] = value
+    settings["headphones_devices"] = _parse_headphones_devices(
+        raw.get("headphones_devices", {})
+    )
     return settings
 
 
-def save_settings(settings: dict[str, str]) -> None:
+def save_settings(settings: dict) -> None:
     SETTINGS_PATH.write_text(json.dumps(settings, indent=2) + "\n")
+
+
+def headphones_device_map(settings: dict | None = None) -> dict[str, str]:
+    if settings is None:
+        settings = load_settings()
+    devices = settings.get("headphones_devices", {})
+    if not isinstance(devices, dict):
+        raise SystemExit("headphones_devices must be an object of name -> MAC.")
+    return {str(name): str(mac) for name, mac in devices.items()}
+
+
+def saved_headphones(settings: dict | None = None) -> list[tuple[str, str]]:
+    if settings is None:
+        settings = load_settings()
+    devices = headphones_device_map(settings)
+    default_name = str(settings.get("default_headphones_name", "")).strip()
+    default_mac = str(settings.get("default_headphones_mac", "")).strip()
+    rows: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    if default_name:
+        rows.append((default_name, devices.get(default_name, default_mac)))
+        seen.add(default_name)
+    for name, mac in devices.items():
+        if name in seen:
+            continue
+        rows.append((name, mac))
+        seen.add(name)
+    return rows
+
+
+def resolve_headphones_mac(name: str, settings: dict | None = None) -> str:
+    name = name.strip()
+    if not name:
+        raise SystemExit("Headphones name is required to look up a MAC.")
+    if settings is None:
+        settings = load_settings()
+    devices = headphones_device_map(settings)
+    if name in devices:
+        return devices[name]
+    default_name = str(settings.get("default_headphones_name", "")).strip()
+    if name == default_name:
+        return str(settings.get("default_headphones_mac", "")).strip()
+    raise SystemExit(
+        f"Unknown headphones name: {name}. "
+        "Add it to headphones_devices in config/beats-settings.json "
+        "or pass --headphones-mac."
+    )
+
+
+def list_headphones(_: argparse.Namespace) -> None:
+    for name, _mac in saved_headphones():
+        print(name)
 
 
 def load_profiles() -> list[dict[str, str]]:
@@ -576,13 +651,18 @@ def build_runtime_context(args: argparse.Namespace) -> dict[str, str]:
     else:
         resolved_music_kind = source_kind(music_source)
 
+    cli_name = args.headphones_name.strip() if args.headphones_name else ""
+    cli_mac = args.headphones_mac.strip() if args.headphones_mac else ""
+    profile_name = profile.get("headphones_name", "").strip() if profile else ""
+    profile_mac = profile.get("headphones_mac", "").strip() if profile else ""
+
     resolved = {
         "PROFILE_NAME_USED": profile["name"] if profile else "",
         "PROFILE_DEFAULT_SOURCE_LABEL": profile.get("music_source_label", "").strip() if profile else "",
         "PROFILE_DEFAULT_SOURCE_TYPE": profile_source_type if profile else "",
         "BOOM_NOTE": profile.get("boom_note", "").strip() if profile else "",
-        "HEADPHONES_NAME": args.headphones_name.strip() if args.headphones_name else "",
-        "HEADPHONES_MAC": args.headphones_mac.strip() if args.headphones_mac else "",
+        "HEADPHONES_NAME": cli_name,
+        "HEADPHONES_MAC": cli_mac,
         "MUSIC_LABEL": music_label,
         "MUSIC_SOURCE": music_source,
         "MUSIC_KIND": resolved_music_kind,
@@ -593,13 +673,16 @@ def build_runtime_context(args: argparse.Namespace) -> dict[str, str]:
     }
 
     if not resolved["HEADPHONES_NAME"]:
-        resolved["HEADPHONES_NAME"] = (
-            profile.get("headphones_name", "").strip() if profile else ""
-        ) or str(settings["default_headphones_name"])
+        resolved["HEADPHONES_NAME"] = profile_name or str(settings["default_headphones_name"])
     if not resolved["HEADPHONES_MAC"]:
-        resolved["HEADPHONES_MAC"] = (
-            profile.get("headphones_mac", "").strip() if profile else ""
-        ) or str(settings["default_headphones_mac"])
+        if cli_name:
+            resolved["HEADPHONES_MAC"] = resolve_headphones_mac(cli_name, settings)
+        elif profile_mac:
+            resolved["HEADPHONES_MAC"] = profile_mac
+        elif profile_name:
+            resolved["HEADPHONES_MAC"] = resolve_headphones_mac(profile_name, settings)
+        else:
+            resolved["HEADPHONES_MAC"] = str(settings["default_headphones_mac"])
 
     return resolved
 
@@ -746,7 +829,11 @@ def get_default_profile(_: argparse.Namespace) -> None:
 
 def get_setting(args: argparse.Namespace) -> None:
     settings = load_settings()
-    print(settings.get(args.key, ""))
+    value = settings.get(args.key, "")
+    if isinstance(value, (dict, list)):
+        print(json.dumps(value))
+        return
+    print(value)
 
 
 def update_setting(args: argparse.Namespace) -> None:
@@ -917,6 +1004,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     list_sources_parser.set_defaults(func=list_sources)
     subparsers.add_parser("list-profiles").set_defaults(func=list_profiles)
+    subparsers.add_parser("list-headphones").set_defaults(func=list_headphones)
     subparsers.add_parser("get-default-profile").set_defaults(func=get_default_profile)
     subparsers.add_parser("view-settings").set_defaults(func=view_settings)
     subparsers.add_parser("view-profiles").set_defaults(func=view_profiles)
