@@ -17,7 +17,6 @@ Then open an app from `dist/`, or use the CLI:
 ```bash
 open dist/Focus_Beats.app
 beats lock-in "Deep Work"
-beats auto
 ```
 
 Copy `config/beats-settings.example.json` to `config/beats-settings.json` and set your headphones name and MAC before the first run (if you do not already have a local settings file). That live file is gitignored.
@@ -34,7 +33,6 @@ Ensure `~/.local/bin` is on your `PATH`. Shortcuts should call the stable CLI:
 
 ```bash
 beats lock-in "$1"
-beats auto
 ```
 
 ## Doctor
@@ -61,7 +59,7 @@ No cloud credentials are stored in this repo. `config/beats-settings.json` is gi
 
 - `src/` — AppleScript / Swift app sources
 - `scripts/` — shell + Python helpers (`beats`, `doctor.sh`, config CLI, runners, build/install)
-- `config/` — profiles, settings, music sources, auto-profile rules
+- `config/` — profiles, settings, music sources
 - `assets/` — shared app icon source (`zR5UJ.jpg`)
 - `dist/` — built `.app` bundles (open from here; rebuild with install/build scripts)
 - `docs/` — user manual and design notes

@@ -63,7 +63,7 @@ Source behavior:
 Profile behavior:
 
 - profiles now store an explicit source type: `apple_music`, `url`, or `none`
-- that type controls the default non-interactive path used by Siri, auto-profile, and any profile run with no manual source override
+- that type controls the default non-interactive path used by Siri and any profile run with no manual source override
 - in the interactive picker, you can still override the profile default for the current run
 
 If `config/beats-settings.json` has more than one saved headset, Focus_Beats asks **Which headphones?** before starting the run. One saved device skips the dialog. See [Multiple headphones](#multiple-headphones).
@@ -122,12 +122,6 @@ This action supports:
 - `View Profiles`
 - `Add or Update Profile`
 - `Remove Profile`
-- `View Auto-Profile Rules`
-- `Set Wi-Fi Rule`
-- `Remove Wi-Fi Rule`
-- `Add Time Rule`
-- `Remove Time Rule`
-- `Set Fallback Profile`
 
 Profiles can define:
 
@@ -142,12 +136,6 @@ Profile source types:
 - `apple_music`: the default source must be a named playlist entry in `config/beats-music-sources.tsv`
 - `url`: the default source must be a named URL entry in `config/beats-music-sources.tsv`
 - `none`: the profile resolves to `Headphones Only`
-
-Auto-profile rules can define:
-
-- Wi-Fi SSID to profile mapping
-- time range to profile mapping
-- fallback profile when no rule matches
 
 ### Beats_Status
 
@@ -234,7 +222,6 @@ Primary config files:
 - `config/beats-settings.json`
 - `config/beats-profiles.json`
 - `config/beats-music-sources.tsv`
-- `config/beats-profile-rules.json` (auto-profile rules; see [Context-Aware Auto-Profile](#context-aware-auto-profile))
 
 ## Dependencies
 
@@ -321,7 +308,7 @@ Symptom:
 
 Fix:
 
-- run `Focus_Beats.app`, `beats-siri-trigger.sh`, or `beats-auto-profile.sh` once
+- run `Focus_Beats.app` or `beats-siri-trigger.sh` once
 - verify the status file path in `Beats_Settings.app`
 - use `Reveal Status File` from the menu bar app to inspect the current JSON path
 
@@ -401,125 +388,6 @@ for that final OS-side hookup.
   file schema.
 - No handling for Shortcuts running multiple BEATS requests concurrently.
 
-## Context-Aware Auto-Profile
-
-`scripts/beats-auto-profile.sh` is a zero-input entry point: it resolves a
-session profile from live context (current Wi-Fi SSID, current time) instead
-of a manual pick or a Siri-dictated name, then hands off to
-`beats-siri-trigger.sh` unchanged. It's meant for automations that can't
-prompt for input at all — e.g. a Shortcuts Automation firing on "arrive at
-Wi-Fi network" or a fixed time of day.
-
-Status: script and rule engine are built. Wiring it into a real Shortcuts
-Automation on this Mac has not been done or tested — same caveat as the Siri
-Shortcut Trigger above.
-
-### How resolution works
-
-Precedence, highest first:
-
-1. **Wi-Fi SSID match** — if the current network's SSID has a rule.
-2. **Time-of-day range** — if the current time falls in a configured range.
-3. **Fallback profile** — an explicit catch-all, if set.
-4. **Nothing** — resolves to blank, which `beats-headphones.sh` already
-   treats as "use `default_profile` from `beats-settings.json`." No
-   existing default-profile behavior changes.
-
-Rules live in `config/beats-profile-rules.json` and are only ever read
-through `beats_config.py`, never edited by hand-parsing in the shell
-scripts. If a rule points at a profile that's since been deleted, resolution
-silently skips that rule and falls through to the next signal — a stale
-rules file degrades gracefully instead of breaking a run.
-
-Non-goal in this version: time ranges spanning midnight (e.g. `22:00`–`02:00`)
-are rejected at creation time rather than silently mishandled. Calendar/
-EventKit-based rules are also out of scope for this version — see
-`docs/PROPOSED_UPGRADES.md`, Upgrade A, for that as explicit future scope.
-
-### Managing rules
-
-Preferred path:
-
-- use `Beats_Settings.app` for viewing and editing Wi-Fi, time, and fallback rules
-
-CLI path:
-
-```bash
-# View current rules
-python3 scripts/beats_config.py view-profile-rules
-
-# Wi-Fi rules
-python3 scripts/beats_config.py set-wifi-rule "Office-5G" "Deep Work"
-python3 scripts/beats_config.py remove-wifi-rule "Office-5G"
-
-# Time-of-day rules (24-hour HH:MM, start <= end, no midnight wraparound)
-python3 scripts/beats_config.py add-time-rule "13:00" "14:00" "Focus Reset"
-python3 scripts/beats_config.py remove-time-rule 0   # by index shown in view-profile-rules
-
-# Fallback profile (used when no Wi-Fi or time rule matches)
-python3 scripts/beats_config.py set-fallback-profile "Silent Routing"
-python3 scripts/beats_config.py set-fallback-profile ""   # clear it
-```
-
-All four rule-editing commands validate the target profile name against
-`beats-profiles.json` and reject unknown profiles up front.
-
-### Wire it into a zero-input Shortcuts Automation
-
-1. Install/link the stable CLI if needed:
-
-   ```bash
-   ./scripts/install_desktop_apps.sh
-   ```
-
-2. Configure at least one Wi-Fi or time rule (see above) — with no rules
-   configured, this always resolves to the existing default profile, which
-   is a safe but unremarkable starting state.
-3. In **Shortcuts**, go to the **Automation** tab and create a new personal
-   automation (e.g. trigger: "Arrive" at a saved Wi-Fi network, or "Time of
-   Day").
-4. Turn off "Ask Before Running" for this automation — the entire point is
-   that it runs without a prompt.
-5. Add action **Run Shell Script**:
-   - Shell: `/bin/zsh`
-   - Script:
-
-     ```bash
-     export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
-     beats auto
-     ```
-
-6. Optionally add **Show Notification** using the shell script's result, so
-   a silent automation still gives visible confirmation.
-
-### Validation before trusting it
-
-- Run it directly first, with no Shortcuts involved:
-
-  ```bash
-  beats auto
-  ```
-
-  Confirm the resolved profile (visible in the printed summary line) matches
-  what your current Wi-Fi/time rules should produce.
-- Check what SSID macOS actually reports, if resolution isn't matching:
-
-  ```bash
-  networksetup -getairportnetwork en0
-  ```
-
-  Some Macs expose Wi-Fi on `en1` instead of `en0` — if `en0` reports "not
-  associated" but you are connected, this is the first thing to check.
-- Only after a direct run resolves correctly, enable the Shortcuts
-  Automation trigger.
-
-### Non-goals for this version
-
-- No calendar/EventKit signal (explicit future scope, not this version).
-- No time ranges spanning midnight.
-- No changes to `beats-headphones.sh`, `beats-siri-trigger.sh`, or
-  existing config file formats — this is strictly an additive lookup layer.
-
 ## Operational Best Practices
 
 - Keep Boom 3D in the preferred saved state before running the workflow.
@@ -527,6 +395,5 @@ All four rule-editing commands validate the target profile name against
 - Use named sources for stable daily options.
 - Keep ad hoc streaming links in `Custom URL`.
 - Use `beats-siri-trigger.sh` for automation surfaces that cannot show dialogs.
-- Use `beats-auto-profile.sh` only after rule validation on the real Mac.
 - Launch `Beats_Status.app` only when you want a persistent live view; it is intentionally opt-in, not auto-installed.
-- Version-control `beats-music-sources.tsv`, `beats-profiles.json`, and `beats-profile-rules.json` after meaningful changes. Keep `beats-settings.json` local (gitignored).
+- Version-control `beats-music-sources.tsv` and `beats-profiles.json` after meaningful changes. Keep `beats-settings.json` local (gitignored).

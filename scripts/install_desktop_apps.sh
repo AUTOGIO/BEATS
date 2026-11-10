@@ -21,6 +21,6 @@ printf 'Linked CLI: %s -> %s\n' "${BIN_DIR}/beats" "${SCRIPT_DIR}/beats"
 if [[ ":${USER_PATH}:" != *":${BIN_DIR}:"* ]]; then
   printf 'Add to your shell profile if needed:\n  export PATH="%s:$PATH"\n' "${BIN_DIR}"
 fi
-printf 'Shortcuts should call:\n  beats lock-in "$1"\n  beats auto\n'
+printf 'Shortcuts should call:\n  beats lock-in "$1"\n'
 printf 'Open apps from:\n  %s\n' "${DIST_DIR}"
 printf 'Stream Deck can open:\n  %s\n  %s\n' "${DIST_DIR}/Stop_Beats.app" "${SCRIPT_DIR}/beats-stop.sh"

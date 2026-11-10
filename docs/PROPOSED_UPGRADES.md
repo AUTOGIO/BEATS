@@ -1,5 +1,7 @@
 # Proposed Upgrades
 
+Upgrade A (auto-profile) was removed on 2026-11-10 as unused.
+
 Two capability extensions. Both assume the built prototype in
 `docs/USER_MANUAL.md#siri-shortcut-trigger`
 (`scripts/beats-siri-trigger.sh`) as the non-interactive entry point they

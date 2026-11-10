@@ -21,7 +21,6 @@ class BeatsConfigTests(unittest.TestCase):
         self.settings_path = self.config_dir / "beats-settings.json"
         self.profiles_path = self.config_dir / "beats-profiles.json"
         self.sources_path = self.config_dir / "beats-music-sources.tsv"
-        self.rules_path = self.config_dir / "beats-profile-rules.json"
 
         self.settings_path.write_text(
             json.dumps(
@@ -67,19 +66,6 @@ class BeatsConfigTests(unittest.TestCase):
             "WORK\thttps://example.com/work\n"
             "Focus Noise\tFocus Noise\n"
         )
-        self.rules_path.write_text(
-            json.dumps(
-                {
-                    "wifi": {"Office-5G": "Deep Work"},
-                    "time_ranges": [
-                        {"start": "09:00", "end": "12:00", "profile": "Focus Reset"}
-                    ],
-                    "fallback_profile": "Deep Work",
-                },
-                indent=2,
-            )
-            + "\n"
-        )
 
         self.path_patch = patch.multiple(
             config,
@@ -87,7 +73,6 @@ class BeatsConfigTests(unittest.TestCase):
             SETTINGS_PATH=self.settings_path,
             PROFILES_PATH=self.profiles_path,
             SOURCES_PATH=self.sources_path,
-            RULES_PATH=self.rules_path,
         )
         self.path_patch.start()
 
@@ -132,20 +117,6 @@ class BeatsConfigTests(unittest.TestCase):
                 type("Args", (), {"label": "Headphones Only", "value": "x"})()
             )
 
-    def test_resolve_profile_from_context(self) -> None:
-        self.assertEqual(
-            config.resolve_profile_from_context("Office-5G", "10:00"),
-            "Deep Work",
-        )
-        self.assertEqual(
-            config.resolve_profile_from_context("", "10:00"),
-            "Focus Reset",
-        )
-        self.assertEqual(
-            config.resolve_profile_from_context("Unknown", "18:00"),
-            "Deep Work",
-        )
-
     def test_runtime_env_rejects_unknown_profile(self) -> None:
         args = type(
             "Args",
@@ -187,20 +158,6 @@ class BeatsConfigTests(unittest.TestCase):
             return_value="Current Wi-Fi Network: Office-5G\n",
         ):
             self.assertEqual(config._ssid_from_networksetup(), "Office-5G")
-
-    def test_list_wifi_and_time_rules(self) -> None:
-        from io import StringIO
-
-        args = type("Args", (), {})()
-        buffer = StringIO()
-        with patch("sys.stdout", buffer):
-            config.list_wifi_rules(args)
-        self.assertIn("Office-5G\tDeep Work", buffer.getvalue())
-
-        buffer = StringIO()
-        with patch("sys.stdout", buffer):
-            config.list_time_rules(args)
-        self.assertIn("0\t09:00\t12:00\tFocus Reset", buffer.getvalue())
 
     def _write_headphones_devices(self, devices: dict[str, str]) -> None:
         settings = json.loads(self.settings_path.read_text())

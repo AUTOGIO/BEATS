@@ -23,7 +23,6 @@ BEATS — focus-session launcher
 Usage:
   beats doctor
   beats lock-in [profile]
-  beats auto
   beats stop
   beats config <beats_config.py args...>
   beats install
@@ -31,7 +30,6 @@ Usage:
 
 Shortcuts should call:
   beats lock-in "$1"
-  beats auto
 EOF
 }
 
@@ -46,9 +44,6 @@ case "$cmd" in
   lock-in|siri)
     shift
     exec "${SCRIPT_DIR}/beats-siri-trigger.sh" "${1:-}"
-    ;;
-  auto|auto-profile)
-    exec "${SCRIPT_DIR}/beats-auto-profile.sh"
     ;;
   stop|off|shutdown)
     shift

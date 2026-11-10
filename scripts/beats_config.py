@@ -17,7 +17,6 @@ APP_SUPPORT_DIR = Path.home() / "Library" / "Application Support" / "LockInAudio
 SETTINGS_PATH = CONFIG_DIR / "beats-settings.json"
 PROFILES_PATH = CONFIG_DIR / "beats-profiles.json"
 SOURCES_PATH = CONFIG_DIR / "beats-music-sources.tsv"
-RULES_PATH = CONFIG_DIR / "beats-profile-rules.json"
 
 DEFAULT_SETTINGS = {
     "default_profile": "Deep Work",
@@ -78,20 +77,6 @@ STATUS_STEP_SPECS = (
     ("input", "Input", "STEP_INPUT"),
     ("music", "Music", "STEP_MUSIC"),
 )
-
-# Upgrade A (Context-Aware Auto-Profile, see docs/PROPOSED_UPGRADES.md).
-# Pure rule lookup, no prediction: Wi-Fi SSID match takes precedence over
-# time-of-day ranges, which take precedence over an explicit fallback
-# profile. If nothing matches, resolution returns "" (empty), which the
-# rest of the pipeline already treats as "use config/beats-settings.json
-# default_profile" -- so this file adds a lookup layer without duplicating
-# or overriding existing default-profile logic.
-DEFAULT_RULES: dict[str, object] = {
-    "wifi": {},
-    "time_ranges": [],
-    "fallback_profile": "",
-}
-
 
 def _run_text(argv: list[str], timeout: int = 8) -> str:
     try:
@@ -428,89 +413,6 @@ def get_default_profile_name() -> str:
     return profiles[0]["name"] if profiles else ""
 
 
-def load_rules() -> dict[str, object]:
-    ensure_file(RULES_PATH, json.dumps(DEFAULT_RULES, indent=2) + "\n")
-    raw = json.loads(RULES_PATH.read_text())
-    rules = json.loads(json.dumps(DEFAULT_RULES))  # deep copy of defaults
-    wifi = raw.get("wifi", {})
-    if isinstance(wifi, dict):
-        rules["wifi"] = {
-            str(ssid).strip(): str(profile).strip()
-            for ssid, profile in wifi.items()
-            if str(ssid).strip() and str(profile).strip()
-        }
-
-    time_ranges = raw.get("time_ranges", [])
-    cleaned_ranges: list[dict[str, str]] = []
-    if isinstance(time_ranges, list):
-        for entry in time_ranges:
-            if not isinstance(entry, dict):
-                continue
-            start = str(entry.get("start", "")).strip()
-            end = str(entry.get("end", "")).strip()
-            profile = str(entry.get("profile", "")).strip()
-            if start and end and profile:
-                cleaned_ranges.append({"start": start, "end": end, "profile": profile})
-    rules["time_ranges"] = cleaned_ranges
-
-    rules["fallback_profile"] = str(raw.get("fallback_profile", "")).strip()
-    return rules
-
-
-def save_rules(rules: dict[str, object]) -> None:
-    RULES_PATH.write_text(json.dumps(rules, indent=2) + "\n")
-
-
-def _valid_time_hhmm(value: str) -> bool:
-    parts = value.split(":")
-    if len(parts) != 2:
-        return False
-    hour_str, minute_str = parts
-    if not (hour_str.isdigit() and minute_str.isdigit()):
-        return False
-    hour, minute = int(hour_str), int(minute_str)
-    return 0 <= hour <= 23 and 0 <= minute <= 59
-
-
-def _time_in_range(now: str, start: str, end: str) -> bool:
-    # Simple lexicographic HH:MM comparison. Non-goal: ranges that wrap past
-    # midnight (e.g. 22:00-02:00) are not supported in v1 -- document this
-    # rather than adding wraparound logic before it's actually needed.
-    if start <= end:
-        return start <= now <= end
-    return False
-
-
-def resolve_profile_from_context(wifi_ssid: str, now_hhmm: str) -> str:
-    """Return a profile name from context signals, or "" if nothing matches.
-
-    Precedence: Wi-Fi SSID match, then time-of-day range, then explicit
-    fallback_profile. Any rule pointing at a profile that no longer exists
-    is skipped (fail-safe, not fail-loud) so a stale rules file can't break
-    a run -- it just falls through to the next signal.
-    """
-    rules = load_rules()
-    wifi_ssid = wifi_ssid.strip()
-    now_hhmm = now_hhmm.strip()
-
-    if wifi_ssid:
-        candidate = rules["wifi"].get(wifi_ssid, "")
-        if candidate and get_profile(candidate):
-            return candidate
-
-    if now_hhmm and _valid_time_hhmm(now_hhmm):
-        for entry in rules["time_ranges"]:
-            if _time_in_range(now_hhmm, entry["start"], entry["end"]):
-                if get_profile(entry["profile"]):
-                    return entry["profile"]
-
-    fallback = rules["fallback_profile"]
-    if fallback and get_profile(fallback):
-        return fallback
-
-    return ""
-
-
 def source_lookup() -> dict[str, str]:
     return {label: source for label, source in load_sources()}
 
@@ -695,97 +597,6 @@ def runtime_env(args: argparse.Namespace) -> None:
 
 def runtime_env_json(args: argparse.Namespace) -> None:
     print(json.dumps(build_runtime_context(args)))
-
-
-def resolve_profile(args: argparse.Namespace) -> None:
-    print(resolve_profile_from_context(args.wifi_ssid or "", args.now or ""))
-
-
-def list_wifi_rules(_: argparse.Namespace) -> None:
-    rules = load_rules()
-    for ssid, profile in rules["wifi"].items():
-        print(f"{ssid}\t{profile}")
-
-
-def list_time_rules(_: argparse.Namespace) -> None:
-    rules = load_rules()
-    for index, entry in enumerate(rules["time_ranges"]):
-        print(f"{index}\t{entry['start']}\t{entry['end']}\t{entry['profile']}")
-
-
-def view_profile_rules(_: argparse.Namespace) -> None:
-    rules = load_rules()
-    if not rules["wifi"] and not rules["time_ranges"] and not rules["fallback_profile"]:
-        print("No profile rules configured.")
-        return
-    lines = []
-    if rules["wifi"]:
-        lines.append("Wi-Fi rules:")
-        for ssid, profile in rules["wifi"].items():
-            lines.append(f"  {ssid} -> {profile}")
-    if rules["time_ranges"]:
-        lines.append("Time rules:")
-        for entry in rules["time_ranges"]:
-            lines.append(f"  {entry['start']}-{entry['end']} -> {entry['profile']}")
-    if rules["fallback_profile"]:
-        lines.append(f"Fallback profile: {rules['fallback_profile']}")
-    print("\n".join(lines))
-
-
-def set_wifi_rule(args: argparse.Namespace) -> None:
-    ssid = args.ssid.strip()
-    profile = args.profile.strip()
-    if not ssid or not profile:
-        raise SystemExit("SSID and profile are required.")
-    if not get_profile(profile):
-        raise SystemExit(f"Unknown profile: {profile}")
-    rules = load_rules()
-    rules["wifi"][ssid] = profile
-    save_rules(rules)
-
-
-def remove_wifi_rule(args: argparse.Namespace) -> None:
-    ssid = args.ssid.strip()
-    rules = load_rules()
-    rules["wifi"].pop(ssid, None)
-    save_rules(rules)
-
-
-def add_time_rule(args: argparse.Namespace) -> None:
-    start = args.start.strip()
-    end = args.end.strip()
-    profile = args.profile.strip()
-    if not _valid_time_hhmm(start) or not _valid_time_hhmm(end):
-        raise SystemExit("Start and end must be HH:MM (24-hour).")
-    if start > end:
-        raise SystemExit(
-            "Ranges spanning midnight are not supported in v1; "
-            "use a start time earlier than or equal to the end time."
-        )
-    if not get_profile(profile):
-        raise SystemExit(f"Unknown profile: {profile}")
-    rules = load_rules()
-    rules["time_ranges"].append({"start": start, "end": end, "profile": profile})
-    save_rules(rules)
-
-
-def remove_time_rule(args: argparse.Namespace) -> None:
-    index = args.index
-    rules = load_rules()
-    if 0 <= index < len(rules["time_ranges"]):
-        rules["time_ranges"].pop(index)
-        save_rules(rules)
-    else:
-        raise SystemExit(f"No time rule at index {index}.")
-
-
-def set_fallback_profile(args: argparse.Namespace) -> None:
-    name = args.name.strip()
-    if name and not get_profile(name):
-        raise SystemExit(f"Unknown profile: {name}")
-    rules = load_rules()
-    rules["fallback_profile"] = name
-    save_rules(rules)
 
 
 def list_profiles(_: argparse.Namespace) -> None:
@@ -1043,38 +854,6 @@ def build_parser() -> argparse.ArgumentParser:
     set_default_profile_parser = subparsers.add_parser("set-default-profile")
     set_default_profile_parser.add_argument("name")
     set_default_profile_parser.set_defaults(func=set_default_profile)
-
-    resolve_profile_parser = subparsers.add_parser("resolve-profile")
-    resolve_profile_parser.add_argument("--wifi-ssid")
-    resolve_profile_parser.add_argument("--now", help="Current time as HH:MM (24-hour)")
-    resolve_profile_parser.set_defaults(func=resolve_profile)
-
-    subparsers.add_parser("view-profile-rules").set_defaults(func=view_profile_rules)
-    subparsers.add_parser("list-wifi-rules").set_defaults(func=list_wifi_rules)
-    subparsers.add_parser("list-time-rules").set_defaults(func=list_time_rules)
-
-    set_wifi_rule_parser = subparsers.add_parser("set-wifi-rule")
-    set_wifi_rule_parser.add_argument("ssid")
-    set_wifi_rule_parser.add_argument("profile")
-    set_wifi_rule_parser.set_defaults(func=set_wifi_rule)
-
-    remove_wifi_rule_parser = subparsers.add_parser("remove-wifi-rule")
-    remove_wifi_rule_parser.add_argument("ssid")
-    remove_wifi_rule_parser.set_defaults(func=remove_wifi_rule)
-
-    add_time_rule_parser = subparsers.add_parser("add-time-rule")
-    add_time_rule_parser.add_argument("start")
-    add_time_rule_parser.add_argument("end")
-    add_time_rule_parser.add_argument("profile")
-    add_time_rule_parser.set_defaults(func=add_time_rule)
-
-    remove_time_rule_parser = subparsers.add_parser("remove-time-rule")
-    remove_time_rule_parser.add_argument("index", type=int)
-    remove_time_rule_parser.set_defaults(func=remove_time_rule)
-
-    set_fallback_profile_parser = subparsers.add_parser("set-fallback-profile")
-    set_fallback_profile_parser.add_argument("name")
-    set_fallback_profile_parser.set_defaults(func=set_fallback_profile)
 
     subparsers.add_parser("write-status").set_defaults(func=write_status)
     subparsers.add_parser("current-wifi-ssid").set_defaults(func=print_wifi_ssid)
